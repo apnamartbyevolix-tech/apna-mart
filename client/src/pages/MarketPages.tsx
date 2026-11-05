@@ -3,20 +3,28 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  Apple,
   ArrowRight,
+  Basket,
   BadgePercent,
   Clock3,
+  Carrot,
+  CookingPot,
   Heart,
   MapPin,
   Minus,
+  Milk,
+  NotebookPen,
   Plus,
   Search,
   ShieldCheck,
+  Shirt,
   ShoppingBag,
   Sparkles,
   Star,
   Store,
   Truck,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +44,12 @@ import {
   toMarketProduct,
   toMarketShop,
 } from "@/lib/marketplace";
+
+function CategorySymbol({name}:{name:string|null}) {
+  const symbols:Record<string,typeof Store>={basket:Basket,carrot:Carrot,milk:Milk,book:NotebookPen,apple:Apple,wrench:Wrench,'cooking-pot':CookingPot,shirt:Shirt,sparkles:Sparkles,home:Store,cookie:ShoppingBag};
+  const Icon=symbols[name??'']??Store;
+  return <Icon aria-hidden="true" style={{width:'1em',height:'1em'}}/>;
+}
 
 export default function Home() {
   const { townId, zoneId, townName, locality, areas, areasLoading } = useMarket();
@@ -127,7 +141,7 @@ export default function Home() {
                     >
                       <span className="category-art">
                         <img onError={imageFallback} src={assetFallback} alt="" loading="lazy" />
-                        <span>{category.icon || "◈"}</span>
+                        <span><CategorySymbol name={category.icon}/></span>
                       </span>
                       <strong>{category.name}</strong>
                     </Link>
@@ -412,7 +426,7 @@ export function CategoryPage({ slug }: { slug: string }) {
                 </div>
                 <div className="category-banner-art">
                   <img onError={imageFallback} src={assetFallback} alt="" />
-                  <span>{category.icon || "◈"}</span>
+                  <span><CategorySymbol name={category.icon}/></span>
                 </div>
               </div>
               <div className="notice-line">
