@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Apple,
   ArrowRight,
-  Basket,
   BadgePercent,
   Clock3,
   Carrot,
@@ -46,7 +45,7 @@ import {
 } from "@/lib/marketplace";
 
 function CategorySymbol({name}:{name:string|null}) {
-  const symbols:Record<string,typeof Store>={basket:Basket,carrot:Carrot,milk:Milk,book:NotebookPen,apple:Apple,wrench:Wrench,'cooking-pot':CookingPot,shirt:Shirt,sparkles:Sparkles,home:Store,cookie:ShoppingBag};
+  const symbols:Record<string,typeof Store>={basket:ShoppingBag,carrot:Carrot,milk:Milk,book:NotebookPen,apple:Apple,wrench:Wrench,'cooking-pot':CookingPot,shirt:Shirt,sparkles:Sparkles,home:Store,cookie:ShoppingBag};
   const Icon=symbols[name??'']??Store;
   return <Icon aria-hidden="true" style={{width:'1em',height:'1em'}}/>;
 }
