@@ -4,6 +4,7 @@ const HELP = `You are the local MyTown Market demo help assistant. Explain only 
 let active = false;
 const quota = new Map<number, {start:number;count:number}>();
 const HANDOVER_HELP='For Cash on Pickup, choose “I’ll pick it up”, review and confirm the server quote, then place the order. Your customer handover code appears in Orders → your saved order details. You show it to the merchant or rider only when the goods are physically handed over. Staff do not supply the code. Never share it in support/chat. SMS OTP is not connected in this demo.';
+const LOCATION_HELP='The isolated local demo has working Town and Service area selectors at the top of the page. Choose Neemgaon Demo and then Demo Bazaar to browse its fictional shops. If you change town, select its service area again. Public production selling is closed; that restriction does not disable this isolated local demo.';
 export function localAssistantEnabled() {
   return process.env.MTM_LOCAL_ASSISTANT_ENABLED === '1' && process.env.NODE_ENV !== 'production' && !process.env.PUBLIC_PREVIEW;
 }
@@ -20,17 +21,19 @@ export async function answerLocalHelp(userId: number, question: string, send: ty
   if(/handover|\botp\b|pickup.*code|code.*pickup|delivery.*code|code.*delivery/i.test(question))
     return {answer:HANDOVER_HELP,source:'Verified app help' as const};
   active=true;
+  const locationQuestion=/town|service area|locality|localities|location|ilaak|sheher/i.test(question);
   try {
     const response=await send('http://127.0.0.1:11434/api/chat', {
       method:'POST',headers:{'Content-Type':'application/json'}, signal:AbortSignal.timeout(45000),
       body:JSON.stringify({model:process.env.MTM_OLLAMA_MODEL||'qwen3.5:4b',stream:false,think:false,
-        messages:[{role:'system',content:HELP+' Exact pickup controls: choose "I’ll pick it up", which selects "Cash on pickup". The handover code belongs to the customer and appears in Orders → their saved order details. Staff do not supply it. Show it to the merchant/rider only at physical handover, never in support/chat. Never tell the customer to ask staff for the code.'},{role:'user',content:question.trim()}],
+        messages:[{role:'system',content:HELP+' Exact pickup controls: choose "I’ll pick it up", which selects "Cash on pickup". The handover code belongs to the customer and appears in Orders → their saved order details. Staff do not supply it. Show it to the merchant/rider only at physical handover, never in support/chat. Never tell the customer to ask staff for the code.'+(locationQuestion?' Answer from these specific verified facts: '+LOCATION_HELP:'')},{role:'user',content:question.trim()}],
         options:{temperature:0.2,num_ctx:2048,num_batch:128,num_predict:256},keep_alive:'10m'}),
     });
     if(!response.ok)throw new Error('Model unavailable');
     const raw=await response.text();if(raw.length>32768)throw new Error('Response too large');
     const result=JSON.parse(raw),answer=result?.message?.content;
     if(typeof answer!=='string'||!answer.trim()||answer.length>8000)throw new Error('Invalid model answer');
+    if(locationQuestion && /cannot|can't|not enabled|not available|not allowed|pending|unable|disabled/i.test(answer))return {answer:LOCATION_HELP,source:'Verified app help' as const};
     if(/handover|\botp\b/i.test(answer))return {answer:HANDOVER_HELP,source:'Verified app help' as const};
     return {answer:answer.trim(),source:'Local Ollama · app help only' as const};
   }catch{throw new TRPCError({code:'SERVICE_UNAVAILABLE',message:'The local AI is unavailable. Your cart and orders are unaffected; use the app pages or Support.'});}

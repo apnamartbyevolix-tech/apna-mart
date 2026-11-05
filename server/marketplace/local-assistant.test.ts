@@ -3,6 +3,11 @@ import {answerLocalHelp} from './local-assistant';
 beforeEach(()=>{vi.stubEnv('MTM_LOCAL_ASSISTANT_ENABLED','1');vi.stubEnv('NODE_ENV','test');vi.stubEnv('PUBLIC_PREVIEW','');});
 afterEach(()=>vi.unstubAllEnvs());
 describe('local model help isolation',()=>{
+  it('does not let a model confuse the working local location picker with closed public selling',async()=>{
+    const send=vi.fn(async()=>new Response(JSON.stringify({message:{content:'You cannot select a town because public selling is not enabled.'}})));
+    const result=await answerLocalHelp(15,'How do I choose town and service area?',send as typeof fetch);
+    expect(result.source).toBe('Verified app help');expect(result.answer).toContain('working Town and Service area selectors');
+  });
   it('answers handover security from reviewed facts without asking the model',async()=>{
     const send=vi.fn();const result=await answerLocalHelp(14,'Where is my pickup handover code?',send);
     expect(send).not.toHaveBeenCalled();expect(result.source).toBe('Verified app help');expect(result.answer).toContain('Staff do not supply the code');
