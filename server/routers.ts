@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { connectorStatus } from './integrations/apna-galla/adapter';
+import { answerLocalHelp, localAssistantEnabled } from './marketplace/local-assistant';
 import { checkoutInput } from "../shared/checkout";
 import { duplicateCheckout, prepareCheckout, requestFingerprint } from "./marketplace/checkout";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
@@ -884,6 +886,18 @@ function requireLocalMarketplace(req: any) {
 
 export const appRouter = router({
   system: systemRouter,
+  integration: router({ status: adminProcedure.query(() => connectorStatus()) }),
+  localAssistant: router({
+    status: publicProcedure.query(({ctx}) => {
+      if(!localAssistantEnabled())return {enabled:false};
+      requireLocalMarketplace(ctx.req);
+      return {enabled:true};
+    }),
+    ask: protectedProcedure.input(z.object({question:z.string().trim().min(1).max(1200)})).mutation(({ctx,input}) => {
+      requireLocalMarketplace(ctx.req);
+      return answerLocalHelp(ctx.user.id,input.question);
+    }),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

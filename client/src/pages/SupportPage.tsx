@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LocalHelp from '@/components/LocalHelp';
 import { Link } from "wouter";
 import { ArrowLeft, ArrowRight, CircleHelp, MessageSquareText, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -100,6 +101,7 @@ export default function SupportPage() {
         Ticket updates are shown on this page. SMS and email notifications are not connected.
       </IntegrationNote>
 
+      <LocalHelp />
       <section className="workspace-panel">
         <h2>Start a support ticket</h2>
         <form className="application-form" onSubmit={event => {
