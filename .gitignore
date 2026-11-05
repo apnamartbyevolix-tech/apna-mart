@@ -116,3 +116,13 @@ client/public/__manus__/version.json
 output/playwright/
 .playwright-cli/
 .manus-logs/
+
+# Local architecture map and Android output/secrets
+graphify-out/
+android/.gradle/
+android/**/build/
+android/local.properties
+android/**/capacitor.config.json
+android/**/assets/public/
+*.jks
+*.keystore
