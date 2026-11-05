@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" fill="#f3f4ec"/>
+  <g fill="none" stroke="#16834a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M240 200h160l-15 145H255z"/>
+    <path d="M280 210v-35a40 40 0 0 1 80 0v35"/>
+    <path d="M320 275c-25-38 15-58 43-55-3 30-17 57-43 55z" fill="#d6e7d7"/>
+  </g>
+  <text x="320" y="402" text-anchor="middle" font-family="system-ui,sans-serif" font-size="22" fill="#355642">MyTown Market</text>
+</svg>
