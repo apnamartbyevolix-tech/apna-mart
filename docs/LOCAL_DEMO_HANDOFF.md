@@ -66,7 +66,7 @@ This APK requires the PC/server and the ADB reverse connection. It is **not** a 
 
 ## Verification and remaining gates
 
-The original default baseline passed 172 tests and intentionally skipped 35 DB cases. Final isolated MySQL execution passed all **219 tests, 0 failures, 0 skipped**, including those original 35 workflows and 12 new adapter/AI regressions. TypeScript and the Vite/esbuild web build passed. Existing tests and validation were preserved.
+The original default baseline passed 172 tests and intentionally skipped 35 DB cases. Final isolated MySQL execution passed all **220 tests, 0 failures, 0 skipped**, including those original 35 workflows and 13 new adapter/AI regressions. TypeScript and the Vite/esbuild web build passed. Existing tests and validation were preserved. Security-sensitive handover guidance uses reviewed fixed app facts; model output mentioning handover/OTP falls back to those facts.
 
 Browser verification used a real headed browser: customer persona login, service-area selection, catalogue/cart, below-minimum rejection, a reviewed two-item-quantity pickup quote at the seeded price, explicit confirmation and saved order detail; responsive home screenshots at 390/1440px with no horizontal overflow; a real Ollama reply in Support. Nothing here changes real shop stock.
 

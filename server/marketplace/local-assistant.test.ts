@@ -3,6 +3,10 @@ import {answerLocalHelp} from './local-assistant';
 beforeEach(()=>{vi.stubEnv('MTM_LOCAL_ASSISTANT_ENABLED','1');vi.stubEnv('NODE_ENV','test');vi.stubEnv('PUBLIC_PREVIEW','');});
 afterEach(()=>vi.unstubAllEnvs());
 describe('local model help isolation',()=>{
+  it('answers handover security from reviewed facts without asking the model',async()=>{
+    const send=vi.fn();const result=await answerLocalHelp(14,'Where is my pickup handover code?',send);
+    expect(send).not.toHaveBeenCalled();expect(result.source).toBe('Verified app help');expect(result.answer).toContain('Staff do not supply the code');
+  });
   it('forbids production and public preview before model access',async()=>{
     const send=vi.fn();vi.stubEnv('NODE_ENV','production');await expect(answerLocalHelp(10,'How to order?',send)).rejects.toMatchObject({code:'PRECONDITION_FAILED'});expect(send).not.toHaveBeenCalled();
   });
