@@ -19,8 +19,8 @@ export async function answerLocalHelp(userId: number, question: string, send: ty
     const response=await send('http://127.0.0.1:11434/api/chat', {
       method:'POST',headers:{'Content-Type':'application/json'}, signal:AbortSignal.timeout(45000),
       body:JSON.stringify({model:process.env.MTM_OLLAMA_MODEL||'qwen3.5:4b',stream:false,think:false,
-        messages:[{role:'system',content:HELP},{role:'user',content:question.trim()}],
-        options:{temperature:0.2,num_predict:384},keep_alive:'10m'}),
+        messages:[{role:'system',content:HELP+' Exact pickup controls: choose "I’ll pick it up", which selects "Cash on pickup". The handover code belongs to the customer and appears in Orders → their saved order details. Staff do not supply it. Show it to the merchant/rider only at physical handover, never in support/chat. Never tell the customer to ask staff for the code.'},{role:'user',content:question.trim()}],
+        options:{temperature:0.2,num_ctx:2048,num_batch:128,num_predict:256},keep_alive:'10m'}),
     });
     if(!response.ok)throw new Error('Model unavailable');
     const raw=await response.text();if(raw.length>32768)throw new Error('Response too large');

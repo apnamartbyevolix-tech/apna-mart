@@ -15,5 +15,6 @@ export default function LocalHelp(){
     </form>
     {help.error&&<p role="alert">{help.error.message}</p>}
     {help.data&&<div role="status" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',marginTop:16}}><strong>{help.data.source}</strong><p>{help.data.answer}</p></div>}
+    <p className="summary-small">Your handover code appears in Orders → your saved order. Show it only at physical pickup/delivery. Never share it in chat. AI explanations can be mistaken; the app screens and saved records are authoritative.</p>
   </section>;
 }

@@ -1,5 +1,7 @@
 # MyTown Market
 
+**Local engineering follow-up, 5 November 2026:** the supplied application is preserved. A disabled Apna Galla adapter boundary, local Ollama help and a Capacitor Android debug preview have been added. Public selling and real ERP synchronization remain blocked pending approved sandbox APIs. See [implementation and API gaps](docs/INTEGRATION_IMPLEMENTATION.md) and [local setup, verification and Android limits](docs/LOCAL_DEMO_HANDOFF.md). Original handoff/phase notes below record the earlier state; they are not claims of current ERP or Play readiness.
+
 Responsive, mobile-first marketplace software for independent local shops. The existing web application supports customer discovery and cash orders, merchant fulfillment, optional rider deliveries, and administration. Phase 2A now adds authoritative cart quotes, explicit price/address reconfirmation and checkout recovery.
 
 Public catalogue and new-order creation remain closed until real Apna Galla eligibility is verified. Local demo operation is separate from public-launch readiness. See [the Slice 2 handoff](docs/PHASE_2A_SLICE_2.md), [browser evidence](docs/LOCAL_BROWSER_VERIFICATION.md), and [the timestamp decision requiring review](docs/TIMESTAMP_REVIEW.md). No live ERP integration, online payments or native APK is claimed.
