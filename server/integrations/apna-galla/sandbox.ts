@@ -1,5 +1,6 @@
 /** v1.2-sandbox implementation, confined to disposable localhost databases. */
 import express, { type Express } from "express";
+import {verifyConnection,validateLinkAuth} from './link-auth';
 import {withinShopHours} from '../../../shared/shop-hours';
 import {
   randomUUID,
@@ -26,6 +27,7 @@ import { prepareCheckout } from "../../marketplace/checkout";
 export const sandboxEnabled = () =>
   process.env.MTM_APNA_SANDBOX_ENABLED === "1";
 export function assertSandbox() {
+  validateLinkAuth();
   const u = new URL(process.env.DATABASE_URL || "");
   const peer = new URL(process.env.APNA_SANDBOX_URL || "");
   if (
@@ -191,6 +193,7 @@ export function registerApnaSandbox(app: Express) {
           res.status(401).json({ error: "Invalid sandbox authentication" });
           return;
         }
+        try{verifyConnection('apna',req.method,req.originalUrl,raw,req.headers);}catch{res.status(401).json({message:'Invalid server signature'});return;}
         const b = catalogueSchema.parse(JSON.parse(raw.toString("utf8")));
         if (new Set(b.items.map(i => i.sku)).size !== b.items.length)
           throw Error("Duplicate SKU");

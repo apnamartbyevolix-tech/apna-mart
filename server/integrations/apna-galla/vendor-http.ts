@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import {verifyConnection} from './link-auth';
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -59,6 +60,7 @@ export function registerApnaVendor(app: Express) {
           res.status(401).json({ message: "Invalid sandbox authentication" });
           return;
         }
+        try{verifyConnection('apna',req.method,req.originalUrl,raw,req.headers);}catch{res.status(401).json({message:'Invalid server signature'});return;}
         const b = requestSchema.parse(JSON.parse(raw.toString("utf8"))),
           db = await getDb();
         if (!db) throw Error("Unavailable");

@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import {connectionHeaders} from './link-auth';
 import { request } from 'node:https';
 import { setTimeout as delay } from 'node:timers/promises';
 import { APNA_ROUTES, type IApnaGallaAdapter, type Operation } from './adapter';
@@ -55,6 +56,7 @@ export class SignedSandboxTransport {
           'Content-Type':'application/json', 'Content-Length':String(Buffer.byteLength(body)),
           'X-Apna-Galla-Key':this.config.apiKey, 'X-Apna-Galla-Signature':signature,
           'X-Apna-Galla-Timestamp':timestamp, 'Idempotency-Key':idempotencyKey,
+          ...connectionHeaders('mytown','POST',APNA_ROUTES[operation],Buffer.from(body),idempotencyKey),
         }});
       } catch {
         if (attempt === 4) throw new ApnaTransportError('UNAVAILABLE', true);
