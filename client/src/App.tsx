@@ -73,9 +73,9 @@ function Router() {
       <MarketShell>
         <Suspense
           fallback={
-            <main className="page-loading" role="status">
+            <div className="page-loading" role="status">
               Opening local shops…
-            </main>
+            </div>
           }
         >
           <Switch>

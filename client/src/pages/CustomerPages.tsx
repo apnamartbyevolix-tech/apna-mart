@@ -409,7 +409,7 @@ export function OrderDetailPage({ id }: { id: string }) {
         </div>
       </div>
     );
-  if (!valid) return <NotFoundOrder />;
+  if (!valid || q.error?.data?.code === "NOT_FOUND") return <NotFoundOrder />;
   const handoverEligible =
     data &&
     ((data.order.fulfillmentType === "pickup" &&

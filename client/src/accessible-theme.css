@@ -1,0 +1,38 @@
+/* Keep secondary text and primary actions readable on the light customer theme. */
+.page-content .eyebrow { color: #466b4d; }
+.page-content .discover-hero p { color: #4e613e; }
+.page-content .page-intro > p:last-child,
+.page-content .account-hero > p:not(.eyebrow),
+.page-content .summary-small,
+.page-content .cart-summary > small,
+.page-content .login-required p,
+.page-content .field-label small,
+.page-content .application-form small,
+.page-content .radio-row small,
+.page-content .checkout-card > small,
+.page-content .panel-heading p,
+.page-content .workspace-panel > p,
+.page-content .storefront-heading p,
+.page-content .storefront-stats small,
+.page-content .shop-delivery,
+.page-content .back-link,
+.page-content .detail-shopline,
+.page-content .detail-price del,
+.page-content .detail-price > small,
+.page-content .detail-description,
+.page-content .detail-unit > small,
+.page-content .single-shop-hint,
+.page-content .cart-shop-label small,
+.page-content .cart-line-info > small,
+.page-content .choice-card > small,
+.page-content .checkout-item > span,
+.page-content .checkout-item small,
+.page-content .cart-summary > div:not(.summary-total):not(.summary-divider) { color: #52634f; }
+.page-content .remove-link { color: #8a4f43; }
+.page-content .integration-note p { color: #655b42; }
+.page-content .workspace-panel > p.verified-mobile {
+  color: #345f30;
+  font-size: 13px;
+}
+.page-content .primary-link,
+.page-content button.bg-primary { color: #fff; }
