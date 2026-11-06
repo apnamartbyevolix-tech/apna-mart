@@ -1,3 +1,4 @@
+import type { PublicOffer } from "@shared/offers";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 
@@ -27,6 +28,8 @@ export type MarketShop = {
   ratingCount: number;
 };
 export type MarketProduct = {
+  offer?: PublicOffer | null;
+  shopName?: string;
   id: number;
   shopId: number;
   name: string;
@@ -81,7 +84,8 @@ export function toMarketShop(shop: any): MarketShop {
     deliveryEnabled: Boolean(shop.deliveryEnabled),
     pickupEnabled: Boolean(shop.pickupEnabled),
     isDemo: Boolean(shop.isDemo),
-    ratingAverage: shop.ratingAverage == null ? null : Number(shop.ratingAverage),
+    ratingAverage:
+      shop.ratingAverage == null ? null : Number(shop.ratingAverage),
     ratingCount: Number(shop.ratingCount ?? 0),
   };
 }
@@ -96,6 +100,8 @@ export function toMarketProduct(
     name: product.name,
     unit: product.unit,
     pricePaise: product.pricePaise,
+    offer: product.offer || null,
+    shopName: product.shopName,
     mrpPaise: product.mrpPaise,
     image: product.imageUrl || assetFallback,
     category: categorySlug ?? "",

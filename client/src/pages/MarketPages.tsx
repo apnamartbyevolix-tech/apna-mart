@@ -643,9 +643,10 @@ export function ProductPage({ id }: { id: string }) {
                 </p>
                 <div className="detail-price">
                   {formatINR(product.pricePaise)}
-                  {product.mrpPaise && <del>{formatINR(product.mrpPaise)}</del>}
+                  {(product.offer?.referencePricePaise||product.mrpPaise)?<del>{formatINR(product.offer?.referencePricePaise||product.mrpPaise!)}</del>:null}
                   <small>per {product.unit}</small>
                 </div>
+                {product.offer&&<p className="detail-active-offer"><strong>{product.offer.title}</strong> · Ends {new Date(product.offer.endsAt).toLocaleString('en-IN')}{product.offer.maxPerOrder?' · Maximum '+product.offer.maxPerOrder+' units per order':''}</p>}
                 <p className="detail-description">
                   {product.note || "Details are provided by the listed shop."}
                 </p>
@@ -667,8 +668,8 @@ export function ProductPage({ id }: { id: string }) {
                     </button>
                     <strong>{quantity}</strong>
                     <button
-                      disabled={quantity >= 100}
-                      onClick={() => setQuantity(q => Math.min(100, q + 1))}
+                      disabled={quantity >= (product.offer?.maxPerOrder||100)}
+                      onClick={() => setQuantity(q => Math.min(product.offer?.maxPerOrder||100, q + 1))}
                       aria-label="Increase quantity"
                     >
                       <Plus />

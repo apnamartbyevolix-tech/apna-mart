@@ -25,13 +25,19 @@ import {
   ShopCard,
 } from "@/components/MarketCards";
 import { LoginButton, useMarket } from "@/components/MarketChrome";
-import { imageFallback, formatINR, toMarketProduct, toMarketShop } from "@/lib/marketplace";
+import {
+  imageFallback,
+  formatINR,
+  toMarketProduct,
+  toMarketShop,
+} from "@/lib/marketplace";
 import { trpc } from "@/lib/trpc";
 
 export { CheckoutPage } from "./CheckoutPage";
 
 export function CartPage() {
-  const { cart, setQuantity, clearCart, townId, zoneId, locality } = useMarket();
+  const { cart, setQuantity, clearCart, townId, zoneId, locality } =
+    useMarket();
   const shopId = cart[0]?.product.shopId;
   const shopQuery = trpc.marketplace.shop.useQuery(
     {
@@ -82,7 +88,23 @@ export function CartPage() {
           placed.
         </p>
       </div>
-      {(!shop || shopQuery.error) && <div role="alert" className="integration-note"><div><strong>{shopQuery.error?.message || "This shop is unavailable in your selected locality."}</strong><p>Choose the original service area above, remove items below, or clear this cart. Your items have not been replaced.</p><Button variant="outline" onClick={clearCart}>Clear cart</Button></div></div>}
+      {(!shop || shopQuery.error) && (
+        <div role="alert" className="integration-note">
+          <div>
+            <strong>
+              {shopQuery.error?.message ||
+                "This shop is unavailable in your selected locality."}
+            </strong>
+            <p>
+              Choose the original service area above, remove items below, or
+              clear this cart. Your items have not been replaced.
+            </p>
+            <Button variant="outline" onClick={clearCart}>
+              Clear cart
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="cart-layout">
         <section className="cart-items">
           <div className="cart-shop-label">
@@ -105,7 +127,9 @@ export function CartPage() {
               <img onError={imageFallback} src={product.image} alt="" />
               <div className="cart-line-info">
                 <Link href={`/product/${product.id}`}>{product.name}</Link>
-                <small>{product.unit} · saved price · checked at checkout</small>
+                <small>
+                  {product.unit} · saved price · checked at checkout
+                </small>
                 <strong>{formatINR(product.pricePaise * quantity)}</strong>
               </div>
               <div className="cart-line-actions">
@@ -157,7 +181,13 @@ export function CartPage() {
             Final fees and total are calculated by the server. Minimum order{" "}
             {formatINR(shop?.minimumOrderPaise ?? 0)}.
           </p>
-          <Button size="lg" disabled={!shop || !townId || !zoneId} onClick={() => window.location.assign("/checkout")}>Continue to checkout <ArrowRight /></Button>
+          <Button
+            size="lg"
+            disabled={!shop || !townId || !zoneId}
+            onClick={() => window.location.assign("/checkout")}
+          >
+            Continue to checkout <ArrowRight />
+          </Button>
         </aside>
       </div>
     </div>
@@ -254,11 +284,17 @@ export function OrderDetailPage({ id }: { id: string }) {
   const q = trpc.marketplace.orderDetail.useQuery(
     { orderId: valid ? orderId : -1 },
     {
-      enabled: Boolean(auth.user && valid), retry: false,
+      enabled: Boolean(auth.user && valid),
+      retry: false,
       refetchIntervalInBackground: false,
       refetchInterval: query => {
         const status = query.state.data?.order.status;
-        return status && !["delivered", "rejected", "cancelled", "failed_delivery"].includes(status) ? 10_000 : false;
+        return status &&
+          !["delivered", "rejected", "cancelled", "failed_delivery"].includes(
+            status
+          )
+          ? 10_000
+          : false;
       },
     }
   );
@@ -293,7 +329,11 @@ export function OrderDetailPage({ id }: { id: string }) {
       townId: townId ?? -1,
       zoneId: zoneId ?? -1,
     },
-    { enabled: Boolean(buyAgainRequested && data?.order.vendorId && townId && zoneId) }
+    {
+      enabled: Boolean(
+        buyAgainRequested && data?.order.vendorId && townId && zoneId
+      ),
+    }
   );
   useEffect(() => {
     if (buyAgainRequested && buyAgain.error) {
@@ -385,9 +425,24 @@ export function OrderDetailPage({ id }: { id: string }) {
           <>
             <div className="page-intro">
               <p className="eyebrow">ORDER {data.order.orderNumber}</p>
-              <h1>{data.apnaSync?.pending ? "Awaiting shop confirmation" : data.order.status.replaceAll("_", " ")}</h1>
-              {data.apnaSync?.pending && <p role="status">Your order was received. Stock confirmation is pending; please do not place it again.</p>}
-              <Button variant="outline" disabled={q.isFetching} onClick={() => void q.refetch()}>{q.isFetching ? "Refreshing…" : "Refresh order"}</Button>
+              <h1>
+                {data.apnaSync?.pending
+                  ? "Awaiting shop confirmation"
+                  : data.order.status.replaceAll("_", " ")}
+              </h1>
+              {data.apnaSync?.pending && (
+                <p role="status">
+                  Your order was received. Stock confirmation is pending; please
+                  do not place it again.
+                </p>
+              )}
+              <Button
+                variant="outline"
+                disabled={q.isFetching}
+                onClick={() => void q.refetch()}
+              >
+                {q.isFetching ? "Refreshing…" : "Refresh order"}
+              </Button>
               <p>
                 {new Date(data.order.createdAt).toLocaleString()} ·{" "}
                 {data.order.fulfillmentType === "delivery"
@@ -481,25 +536,62 @@ export function OrderDetailPage({ id }: { id: string }) {
               <section className="workspace-panel">
                 <h2>Review this shop</h2>
                 {data.review ? (
-                  <p>Your review: {data.review.rating}/5{data.review.comment ? ` · ${data.review.comment}` : ""}</p>
+                  <p>
+                    Your review: {data.review.rating}/5
+                    {data.review.comment ? ` · ${data.review.comment}` : ""}
+                  </p>
                 ) : (
-                  <form className="application-form" onSubmit={event => {
-                    event.preventDefault();
-                    reviewOrder.mutate({ orderId, rating, ...(reviewComment.trim() ? { comment: reviewComment.trim() } : {}) });
-                  }}>
-                    <label>Rating
-                      <select value={rating} onChange={event => setRating(Number(event.target.value))}>
-                        {[5, 4, 3, 2, 1].map(value => <option key={value} value={value}>{value} out of 5</option>)}
+                  <form
+                    className="application-form"
+                    onSubmit={event => {
+                      event.preventDefault();
+                      reviewOrder.mutate({
+                        orderId,
+                        rating,
+                        ...(reviewComment.trim()
+                          ? { comment: reviewComment.trim() }
+                          : {}),
+                      });
+                    }}
+                  >
+                    <label>
+                      Rating
+                      <select
+                        value={rating}
+                        onChange={event =>
+                          setRating(Number(event.target.value))
+                        }
+                      >
+                        {[5, 4, 3, 2, 1].map(value => (
+                          <option key={value} value={value}>
+                            {value} out of 5
+                          </option>
+                        ))}
                       </select>
                     </label>
-                    <label>Comment (optional)
-                      <textarea maxLength={2000} rows={3} value={reviewComment} onChange={event => setReviewComment(event.target.value)} />
+                    <label>
+                      Comment (optional)
+                      <textarea
+                        maxLength={2000}
+                        rows={3}
+                        value={reviewComment}
+                        onChange={event => setReviewComment(event.target.value)}
+                      />
                     </label>
-                    <Button type="submit" disabled={reviewOrder.isPending}>{reviewOrder.isPending ? "Saving review…" : "Submit review"}</Button>
-                    {reviewOrder.error && <p role="alert">{reviewOrder.error.message}</p>}
+                    <Button type="submit" disabled={reviewOrder.isPending}>
+                      {reviewOrder.isPending
+                        ? "Saving review…"
+                        : "Submit review"}
+                    </Button>
+                    {reviewOrder.error && (
+                      <p role="alert">{reviewOrder.error.message}</p>
+                    )}
                   </form>
                 )}
-                <p className="summary-small">Only the signed-in customer who placed this delivered order can review it, and each order can be reviewed once.</p>
+                <p className="summary-small">
+                  Only the signed-in customer who placed this delivered order
+                  can review it, and each order can be reviewed once.
+                </p>
               </section>
             )}
             {["placed", "accepted"].includes(data.order.status) && (
@@ -642,9 +734,6 @@ export function AccountPage() {
         <div className="account-links">
           <Link href="/orders">
             <ShoppingBag /> Order history <ArrowRight />
-          </Link>
-          <Link href="/vendor">
-            <Store /> Local business workspace <ArrowRight />
           </Link>
         </div>
         <OtpNote />
@@ -928,24 +1017,34 @@ export function FavoritesPage() {
     { townId: townId ?? -1, zoneId: zoneId ?? -1 },
     { enabled: Boolean(auth.user && townId && zoneId), retry: false }
   );
-  if (auth.loading) return <div className="page-wrap"><QueryState loading /></div>;
-  if (!auth.user) return (
-    <div className="page-wrap">
-      <div className="account-hero">
-        <span className="account-avatar"><Heart /></span>
-        <p className="eyebrow">YOUR LOCAL FAVOURITES</p>
-        <h1>Sign in to see saved shops.</h1>
-        <p>Saved shops are private to your signed-in account.</p>
-        <LoginButton>Sign in securely</LoginButton>
+  if (auth.loading)
+    return (
+      <div className="page-wrap">
+        <QueryState loading />
       </div>
-    </div>
-  );
+    );
+  if (!auth.user)
+    return (
+      <div className="page-wrap">
+        <div className="account-hero">
+          <span className="account-avatar">
+            <Heart />
+          </span>
+          <p className="eyebrow">YOUR LOCAL FAVOURITES</p>
+          <h1>Sign in to see saved shops.</h1>
+          <p>Saved shops are private to your signed-in account.</p>
+          <LoginButton>Sign in securely</LoginButton>
+        </div>
+      </div>
+    );
   return (
     <div className="page-wrap">
       <div className="page-intro">
         <p className="eyebrow">LOCAL FAVOURITES</p>
         <h1>Shops you have saved</h1>
-        <p>Only approved, open shops in your selected service zone are shown.</p>
+        <p>
+          Only approved, open shops in your selected service zone are shown.
+        </p>
       </div>
       <QueryState loading={areasLoading || query.isLoading} error={query.error}>
         {!zoneId ? (
@@ -953,7 +1052,11 @@ export function FavoritesPage() {
             Select a town and locality above to see the saved shops serving you.
           </EmptyState>
         ) : query.data?.length ? (
-          <div className="shop-grid">{query.data.map(row => <ShopCard key={row.id} shop={toMarketShop(row)} />)}</div>
+          <div className="shop-grid">
+            {query.data.map(row => (
+              <ShopCard key={row.id} shop={toMarketShop(row)} />
+            ))}
+          </div>
         ) : query.data ? (
           <EmptyState icon={Heart} title="No saved shops yet">
             Open a local shop and choose “Save this shop” to keep it here.
@@ -991,25 +1094,7 @@ export function SignInPage() {
       label: "Customer",
       persona: "customer" as const,
       name: "Aarti Sharma",
-      desc: "Browse, cart, COD order & reviews",
-    },
-    {
-      label: "Merchant / Vendor",
-      persona: "vendor" as const,
-      name: "Rajesh Kirana (Merchant)",
-      desc: "Manage catalog, orders & self-delivery",
-    },
-    {
-      label: "Delivery Rider",
-      persona: "rider" as const,
-      name: "Vikram Singh (Rider)",
-      desc: "Pickup & deliver assigned orders",
-    },
-    {
-      label: "Platform Administrator",
-      persona: "admin" as const,
-      name: "Marketplace Administrator",
-      desc: "Towns, approvals, terms & cash audit (gated by ALLOW_DEV_ADMIN_LOGIN=1)",
+      desc: "Browse your town, order and track your purchases",
     },
   ];
 
@@ -1019,14 +1104,12 @@ export function SignInPage() {
         <span className="account-avatar">
           <ShieldCheck />
         </span>
-        <p className="eyebrow">PILOT & WORKSPACE ACCESS</p>
-        <h1>
-          {auth.user ? "You're signed in." : "Sign in to MyTown Market"}
-        </h1>
+        <p className="eyebrow">YOUR TOWN, YOUR EVERYDAY</p>
+        <h1>{auth.user ? "You're signed in." : "Sign in to MyTown Market"}</h1>
         <p>
           {auth.user
             ? `Signed in as ${auth.user.name || auth.user.email || "User"} (${auth.user.role === "admin" ? "Administrator" : "Standard user"}).`
-            : "Use your authorized session or select a pilot role below to access customer, merchant, rider, or administrator workspaces."}
+            : "Sign in to save your addresses, place orders and shop from your local favourites."}
         </p>
         {auth.user ? (
           <div
@@ -1067,7 +1150,7 @@ export function SignInPage() {
                     marginBottom: "0.25rem",
                   }}
                 >
-                  Standalone Pilot & Testing Access
+                  Local customer demo
                 </h2>
                 <p
                   style={{
@@ -1076,9 +1159,8 @@ export function SignInPage() {
                     marginBottom: "1rem",
                   }}
                 >
-                  Select an authorized test profile to exercise real end-to-end
-                  customer, vendor, rider, and admin workflows without third-party
-                  dependencies:
+                  Use the fictional customer profile to try this isolated
+                  preview:
                 </p>
 
                 <div
@@ -1111,7 +1193,9 @@ export function SignInPage() {
                       }}
                     >
                       <div>
-                        <strong style={{ fontSize: "0.9rem", display: "block" }}>
+                        <strong
+                          style={{ fontSize: "0.9rem", display: "block" }}
+                        >
                           {p.label} · {p.name}
                         </strong>
                         <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
@@ -1132,14 +1216,6 @@ export function SignInPage() {
             )}
           </>
         )}
-        <div className="otp-notice" style={{ marginTop: "1.25rem" }}>
-          <strong>SMS OTP Status</strong>
-          <span>
-            Provider-independent architecture active. In accordance with
-            platform policy, paid SMS provider is not triggered without
-            authorization.
-          </span>
-        </div>
         <Link href="/" className="text-link">
           Back to shopping <ArrowRight />
         </Link>

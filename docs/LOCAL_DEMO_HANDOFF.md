@@ -77,3 +77,5 @@ The first temporary MariaDB fixture failed two existing JSON-metadata idempotenc
 Other handoff launch gates remain: actual Manus OAuth/customer/merchant/admin identity, approved privacy/consent/deletion/retention, remote storage/media verification, operational backups/monitoring, settlement/refund decisions, ERP stock concurrency and native release acceptance. No payment gateway, SMS provider, live GPS, public listing bypass or automated payouts were added.
 
 References: [Capacitor existing-web-app setup](https://capacitorjs.com/docs/getting-started), [Ollama chat API](https://docs.ollama.com/api/chat), [MySQL Windows ZIP setup](https://dev.mysql.com/doc/refman/8.4/en/windows-install-archive.html). The attached contract remains the authority for integration design; these platform docs do not define Apna Galla wire fields.
+
+Current customer-only connected pilot: see [CUSTOMER_ONLY_SHOP_WORKFLOW.md](CUSTOMER_ONLY_SHOP_WORKFLOW.md). Merchant operations now use Apna Galla; the old public workspace routes and persona buttons are removed. The connected local MyTown runs on port 5206.

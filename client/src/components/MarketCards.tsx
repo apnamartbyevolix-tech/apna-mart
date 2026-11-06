@@ -1,6 +1,19 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowRight, Clock3, MapPin, Plus, Star, Store } from "lucide-react";
+import {
+  ArrowRight,
+  Clock3,
+  MapPin,
+  Plus,
+  Star,
+  Store,
+  Minus,
+  Package,
+  Wheat,
+  Milk,
+  Droplet,
+  Coffee,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMarket } from "@/components/MarketChrome";
 import {
@@ -43,12 +56,43 @@ export function ProductCard({
   product: MarketProduct;
   shopName?: string;
 }) {
-  const { addToCart } = useMarket();
+  const { addToCart, cart, setQuantity } = useMarket();
+  const quantity = cart.find(l => l.product.id === product.id)?.quantity || 0;
+  const Artwork = /rice|atta|flour/i.test(product.name)
+    ? Wheat
+    : /milk|dairy/i.test(product.name)
+      ? Milk
+      : /oil|soap/i.test(product.name)
+        ? Droplet
+        : /tea|coffee/i.test(product.name)
+          ? Coffee
+          : Package;
   const available = product.inStock && product.availability === "available";
   return (
     <article className="product-card">
       <Link href={`/product/${product.id}`} className="product-image-wrap">
-        <img onError={imageFallback} loading="lazy" src={product.image} alt={product.name} />
+        {product.image && product.image !== "/product-placeholder.svg" ? (
+          <img
+            onError={imageFallback}
+            loading="lazy"
+            src={product.image}
+            alt={product.name}
+          />
+        ) : (
+          <span
+            className="product-artwork"
+            aria-label="Product photo unavailable"
+          >
+            <Artwork />
+            <small>ILLUSTRATION</small>
+          </span>
+        )}
+        {product.offer && (
+          <span className="product-offer-badge">
+            {formatINR(product.offer.referencePricePaise - product.pricePaise)}{" "}
+            OFF
+          </span>
+        )}
         {product.isDemo && <span className="demo-sticker">Fictional demo</span>}
       </Link>
       <div className="product-card-body">
@@ -61,21 +105,51 @@ export function ProductCard({
         <div className="product-buy">
           <div>
             <strong>{formatINR(product.pricePaise)}</strong>
-            {product.mrpPaise && <del>{formatINR(product.mrpPaise)}</del>}
+            {product.offer ? (
+              <del>{formatINR(product.offer.referencePricePaise)}</del>
+            ) : product.mrpPaise && product.mrpPaise > product.pricePaise ? (
+              <del>{formatINR(product.mrpPaise)}</del>
+            ) : null}
           </div>
-          <Button
-            size="icon"
-            className="add-button"
-            aria-label={`Add ${product.name} to cart`}
-            disabled={!available}
-            onClick={() => addToCart(product)}
-          >
-            <Plus />
-          </Button>
+          {quantity ? (
+            <div className="product-stepper">
+              <button
+                aria-label={"Decrease " + product.name + " quantity"}
+                onClick={() => setQuantity(product.id, quantity - 1)}
+              >
+                <Minus size={14} />
+              </button>
+              <b aria-live="polite">{quantity}</b>
+              <button
+                aria-label={"Increase " + product.name + " quantity"}
+                disabled={
+                  !!product.offer?.maxPerOrder &&
+                  quantity >= product.offer.maxPerOrder
+                }
+                onClick={() => addToCart(product)}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              className="product-add-text"
+              aria-label={"Add " + product.name + " to cart"}
+              disabled={!available}
+              onClick={() => addToCart(product)}
+            >
+              ADD
+            </button>
+          )}
         </div>
         <Link href={`/shop/${product.shopId}`} className="product-shop">
-          {shopName || "View shop"}
+          {shopName || product.shopName || "View shop"}
         </Link>
+        {product.offer?.maxPerOrder && (
+          <small className="product-offer-limit">
+            Offer: max {product.offer.maxPerOrder} per order
+          </small>
+        )}
       </div>
     </article>
   );
@@ -96,7 +170,12 @@ export function ShopCard({ shop }: { shop: MarketShop }) {
           <div>
             <h3>{shop.name}</h3>
             <p>{shop.categoryLabel}</p>
-            {shop.ratingCount > 0 && <small className="shop-rating"><Star className="size-3" fill="currentColor" /> {shop.ratingAverage?.toFixed(1)} · {shop.ratingCount} reviews</small>}
+            {shop.ratingCount > 0 && (
+              <small className="shop-rating">
+                <Star className="size-3" fill="currentColor" />{" "}
+                {shop.ratingAverage?.toFixed(1)} · {shop.ratingCount} reviews
+              </small>
+            )}
           </div>
           <span className="shop-arrow">
             <ArrowRight />

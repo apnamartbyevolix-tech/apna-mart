@@ -37,7 +37,7 @@ Connector names reserved for a future approved sandbox: `APNA_GALLA_SANDBOX_BASE
 
 Local AI: `MTM_LOCAL_ASSISTANT_ENABLED`, `MTM_OLLAMA_MODEL`. The URL is fixed to loopback; no public Ollama listener or customer data tools are exposed.
 
-Android debug only: `MTM_ANDROID_PREVIEW_URL` (only `http://127.0.0.1:5205`); run `adb reverse tcp:5205 tcp:5205`. Omit this variable for bundled assets. No ERP secret is used in Android or Vite variables.
+Android debug only: `MTM_ANDROID_PREVIEW_URL` (`http://127.0.0.1:5205` or connected sandbox `http://127.0.0.1:5206`); run `adb reverse tcp:5205 tcp:5205`. Omit this variable for bundled assets. No ERP secret is used in Android or Vite variables.
 
 ## Release blockers
 
