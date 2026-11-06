@@ -76,7 +76,7 @@ Android remains Capacitor. For the connected debug preview use MTM_ANDROID_PREVI
 
 - Signed-off production Apna API/eligibility contract, service identities, approved endpoint configuration and security review remain required.
 - Production customer authentication, privacy/account deletion, push delivery, payment-variance administration and support operations must be approved and verified. Existing platform-admin backend controls were preserved; a new production admin portal was not invented.
-- Shop location/service area provisioning and public product photo permissions require a production workflow. Opening-hours scheduling was not added; owners explicitly open/pause their shop.
+- Shop location/service area provisioning and public product photo permissions require a production workflow. Daily opening hours are configurable in India time, including overnight windows; weekly calendars are outside this pilot. Manual pause always wins, and existing orders remain manageable after closing.
 - Current pilot bounds (latest 100 orders, bounded discovery catalogue, 30 shared items, no nonzero tax/fees) need production pagination/capacity work before broad rollout.
 - Existing debug Android packaging does not establish Play Store readiness, production signing or production integration.
 

@@ -1,4 +1,5 @@
 import {activeOffer,effectiveProduct} from "../shared/offers";
+import {validShopHours,withinShopHours} from '../shared/shop-hours';
 import {vendorBridgeContext} from "./marketplace/vendor-context";
 import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
 import { randomUUID } from "node:crypto";
@@ -666,7 +667,7 @@ function publicShop(
     address: shop.address,
     logoUrl: shop.logoUrl,
     coverUrl: shop.coverUrl,
-    isOpen: shop.isOpen,
+    isOpen: shop.isOpen && (process.env.MTM_APNA_SANDBOX_ENABLED!=='1'||withinShopHours(shop.settings)),
     isDemo: shop.isDemo,
     deliveryEnabled: shop.deliveryEnabled,
     pickupEnabled: shop.pickupEnabled,
@@ -1994,8 +1995,8 @@ export const appRouter = router({
               .max(100_000_000)
               .optional(),
             preparationMinutes: z.number().int().min(5).max(240).optional(),
-            openingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
-            closingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+            openingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+            closingTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
           })
           .refine(value => Object.keys(value).length > 0, "No settings were provided")
       )
@@ -2008,6 +2009,7 @@ export const appRouter = router({
           ...(closingTime !== undefined ? { closingTime } : {}),
         };
         const settings = { ...(vendor.settings ?? {}), ...settingPatch };
+        if(!validShopHours(settings))throw new TRPCError({code:'BAD_REQUEST',message:'Set both opening and closing times; use manual hours for an all-day shop'});
         await db
           .update(vendorProfiles)
           .set({

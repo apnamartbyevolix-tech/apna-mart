@@ -1,5 +1,6 @@
 /** v1.2-sandbox implementation, confined to disposable localhost databases. */
 import express, { type Express } from "express";
+import {withinShopHours} from '../../../shared/shop-hours';
 import {
   randomUUID,
   createHash,
@@ -141,9 +142,10 @@ export async function refreshLinkedEligibility() {
         await verify(l.merchant_id);
         valid = !!l.live;
       } catch {}
+      const [shop]=await db.select({settings:vendorProfiles.settings}).from(vendorProfiles).where(eq(vendorProfiles.id,l.vendor_id));
       await db
         .update(vendorProfiles)
-        .set({ status: valid ? "approved" : "suspended", isOpen: valid })
+        .set({ status: valid ? "approved" : "suspended", isOpen: valid&&withinShopHours(shop?.settings) })
         .where(eq(vendorProfiles.id, l.vendor_id));
     }
     refreshAt = Date.now() + 5000;
@@ -238,12 +240,13 @@ export function registerApnaSandbox(app: Express) {
             vendorId = Number(v[0].insertId);
             await tx.insert(vendorCategories).values({ vendorId, categoryId });
           }
+          const [hours]=await tx.select({settings:vendorProfiles.settings}).from(vendorProfiles).where(eq(vendorProfiles.id,vendorId));
           await tx
             .update(vendorProfiles)
             .set({
               shopName: b.shop.name,
               status: b.live ? "approved" : "suspended",
-              isOpen: b.live,
+              isOpen: b.live&&withinShopHours(hours?.settings),
             })
             .where(eq(vendorProfiles.id, vendorId));
           await tx

@@ -1,4 +1,5 @@
 import {activeOffer,effectiveProduct} from "../../shared/offers";
+import {withinShopHours} from '../../shared/shop-hours';
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -86,6 +87,7 @@ export async function prepareCheckout(
       code: "PRECONDITION_FAILED",
       message: "Shop is not accepting orders in the selected town",
     });
+  if(process.env.MTM_APNA_SANDBOX_ENABLED==='1'&&!withinShopHours(shop.settings))throw new TRPCError({code:'PRECONDITION_FAILED',message:'This shop is outside its online opening hours (India time)'});
   const [activeTown] = await tx
     .select({ id: towns.id })
     .from(towns)

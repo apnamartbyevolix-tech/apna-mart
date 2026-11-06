@@ -7,6 +7,7 @@ import { users, vendorProfiles } from "../../../drizzle/schema";
 import { appRouter } from "../../routers";
 import { assertSandbox, sandboxEnabled } from "./sandbox";
 import { vendorBridgeContext } from "../../marketplace/vendor-context";
+import { withinShopHours, validShopHours } from "../../../shared/shop-hours";
 
 const requestSchema = z
   .object({
@@ -107,7 +108,15 @@ export function registerApnaVendor(app: Express) {
               try {
                 switch (b.operation) {
                   case "overview":
-                    output = await caller.vendor.dashboard();
+                    {
+                      const dashboard = await caller.vendor.dashboard();
+                      output = {
+                        ...dashboard,
+                        outsideOpeningHours: !withinShopHours(
+                          dashboard.vendor.settings
+                        ),
+                      };
+                    }
                     break;
                   case "orders": {
                     const list = (
@@ -143,6 +152,8 @@ export function registerApnaVendor(app: Express) {
                       .object({
                         deliveryEnabled: z.boolean(),
                         pickupEnabled: z.boolean(),
+                        openingTime: z.string().nullable().optional(),
+                        closingTime: z.string().nullable().optional(),
                         preparationMinutes: z.number().int().min(5).max(240),
                         minimumOrderPaise: z
                           .number()
@@ -156,6 +167,7 @@ export function registerApnaVendor(app: Express) {
                         "Keep delivery or pickup enabled"
                       )
                       .parse(b.input);
+                    if (!validShopHours(input)) throw new z.ZodError([]);
                     output = await caller.vendor.updateDeliverySettings(input);
                     break;
                   }
@@ -202,16 +214,14 @@ export function registerApnaVendor(app: Express) {
           e?.httpStatus ||
           codes[e?.code] ||
           (e instanceof z.ZodError ? 400 : 503);
-        res
-          .status(status)
-          .json({
-            message:
-              status < 500
-                ? e instanceof z.ZodError
-                  ? "Check the order details and try again"
-                  : e.message
-                : "Order update could not be confirmed. Retry the same action safely.",
-          });
+        res.status(status).json({
+          message:
+            status < 500
+              ? e instanceof z.ZodError
+                ? "Check the order details and try again"
+                : e.message
+              : "Order update could not be confirmed. Retry the same action safely.",
+        });
       }
     }
   );

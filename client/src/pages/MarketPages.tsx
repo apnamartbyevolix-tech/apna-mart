@@ -532,6 +532,7 @@ export function ShopPage({ id }: { id: string }) {
                 </span>
                 <h1>{shop.name}</h1>
                 <p>{shop.description}</p>
+                {query.data.openingTime&&query.data.closingTime&&<p className="shop-opening-hours">Online hours: {query.data.openingTime}–{query.data.closingTime} IST{query.data.openingTime>query.data.closingTime?' · closes next morning':''}</p>}
                 {shop.ratingCount > 0 && <p className="shop-rating"><span aria-label={`${shop.ratingAverage?.toFixed(1)} out of 5`}><Star className="size-3" fill="currentColor" /> {shop.ratingAverage?.toFixed(1)}</span> · {shop.ratingCount} verified order reviews</p>}
                 <span className="open-pill">
                   <span />
