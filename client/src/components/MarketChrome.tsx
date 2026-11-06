@@ -337,7 +337,9 @@ export function MarketShell({ children }: { children: ReactNode }) {
   const zoneChoice = zoneId ? String(zoneId) : "";
 
   return (
-    <div className="app-frame">
+    <div
+      className={"app-frame" + (location === "/login" ? " login-route" : "")}
+    >
       <div className="demo-strip">
         {workspace
           ? "Protected marketplace workspace · actions are authorized by the server"
@@ -556,7 +558,7 @@ export function MarketShell({ children }: { children: ReactNode }) {
         </div>
         <p className="footer-note">
           Demo seed merchants are fictional, not participating real stores.
-          Secure sign-in uses Manus OAuth; SMS OTP is not configured.
+          Customer handover codes are shown privately in signed-in orders.
         </p>
       </footer>
       {!workspace && (

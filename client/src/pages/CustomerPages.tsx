@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import MobileSignIn from "./MobileSignIn";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -667,6 +668,10 @@ export function AccountPage() {
     enabled: Boolean(auth.user),
     retry: false,
   });
+  const identityQ = trpc.account.me.useQuery(undefined, {
+    enabled: !!auth.user,
+    retry: false,
+  });
   const addressesQ = trpc.account.addresses.useQuery(undefined, {
     enabled: Boolean(auth.user),
     retry: false,
@@ -748,7 +753,7 @@ export function AccountPage() {
       <div className="page-intro">
         <p className="eyebrow">ACCOUNT & PRIVACY</p>
         <h1>Hello, {auth.user.name || "neighbour"}.</h1>
-        <p>Signed in with the secure Manus session.</p>
+        <p>Your customer account and saved addresses.</p>
       </div>
       <div className="account-links">
         <Link href="/orders">
@@ -763,6 +768,13 @@ export function AccountPage() {
       </div>
       <section className="workspace-panel">
         <h2>Profile</h2>
+        {identityQ.data?.verifiedMobile && (
+          <p className="verified-mobile">
+            <ShieldCheck size={15} />
+            Verified sign-in number:{" "}
+            <strong>{identityQ.data.verifiedMobile}</strong>
+          </p>
+        )}
         <label className="field-label">
           Contact phone
           <input
@@ -780,7 +792,8 @@ export function AccountPage() {
           {saveProfile.isPending ? "Saving…" : "Save profile"}
         </Button>
         <p className="summary-small">
-          Phone is contact data only; SMS OTP is not configured.
+          This is your delivery contact number. Editing it does not change your
+          verified sign-in number.
         </p>
         {saveProfile.error && <p role="alert">{saveProfile.error.message}</p>}
       </section>
@@ -1001,9 +1014,9 @@ export function AccountPage() {
           </form>
         )}
       </section>
-      <IntegrationNote title="Not connected">
-        SMS OTP, push notifications, privacy policy and account deletion remain
-        unimplemented.
+      <IntegrationNote title="Local preview">
+        Push notifications and account deletion are not available in this
+        preview.
       </IntegrationNote>
       <Button variant="outline" onClick={() => auth.logout()}>
         Sign out
@@ -1125,6 +1138,7 @@ export function SignInPage() {
           </div>
         ) : (
           <>
+            <MobileSignIn />
             {hasManusOAuth && (
               <LoginButton>Continue with Manus OAuth</LoginButton>
             )}
@@ -1225,9 +1239,9 @@ export function SignInPage() {
 }
 function OtpNote() {
   return (
-    <IntegrationNote title="Phone OTP isn't configured">
-      SMS verification is not used for handover. Secure Manus OAuth remains
-      available; customer handover codes are shown only in the signed-in order.
+    <IntegrationNote title="Keep your handover code private">
+      Your sign-in OTP is separate from the handover code shown in your order.
+      Give the handover code to the shop only when you collect your items.
     </IntegrationNote>
   );
 }

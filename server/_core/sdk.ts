@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+import {hasMobileSession,authenticateMobileRequest} from '../auth/mobile-auth';
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -257,6 +258,7 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<AuthenticatedUser> {
+    if(hasMobileSession(req)){const customer=await authenticateMobileRequest(req);if(!customer)throw ForbiddenError('Invalid customer session');return customer;}
     // 1. Prefer the session cookie (regular OAuth login).
     const cookies = this.parseCookies(req.headers.cookie);
     let sessionToken = cookies.get(COOKIE_NAME);

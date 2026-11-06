@@ -2,6 +2,7 @@ import type {PublicOffer} from "../shared/offers";
 import {sql} from "drizzle-orm";
 import {
   boolean,
+  char,
   primaryKey,
   datetime,
   index,
@@ -29,6 +30,18 @@ export const users = mysqlTable("users", {
 });
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export const customerPhoneIdentities=mysqlTable('customer_phone_identities',{
+ phone:varchar('phone',{length:16}).primaryKey(),userId:int('user_id').notNull().unique().references(()=>users.id),verifiedAt:datetime('verified_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+export const customerOtpChallenges=mysqlTable('customer_otp_challenges',{
+ id:varchar('id',{length:36}).primaryKey(),phone:varchar('phone',{length:16}).notNull(),digest:char('digest',{length:64}).notNull(),browserHash:char('browser_hash',{length:64}).notNull(),state:varchar('state',{length:12}).notNull(),attempts:int('attempts').notNull().default(0),expiresAt:datetime('expires_at').notNull(),createdAt:datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+},t=>({phoneCreated:index('otp_phone_created').on(t.phone,t.createdAt)}));
+export const customerAuthLimits=mysqlTable('customer_auth_limits',{
+ bucket:char('bucket',{length:64}).primaryKey(),hits:int('hits').notNull(),resetsAt:datetime('resets_at').notNull(),lastAt:datetime('last_at').notNull(),
+});
+export const customerMobileSessions=mysqlTable('customer_mobile_sessions',{
+ tokenHash:char('token_hash',{length:64}).primaryKey(),userId:int('user_id').notNull().references(()=>users.id),expiresAt:datetime('expires_at').notNull(),lastSeenAt:datetime('last_seen_at').notNull().default(sql`CURRENT_TIMESTAMP`),revokedAt:datetime('revoked_at'),createdAt:datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+},t=>({user:index('mobile_session_user').on(t.userId)}));
 
 export const towns = mysqlTable("towns", {
   id: int("id").autoincrement().primaryKey(),

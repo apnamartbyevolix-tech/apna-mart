@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerMobileAuth } from "../auth/mobile-auth";
 import { registerApnaVendor } from "../integrations/apna-galla/vendor-http";
 import { registerApnaSandbox } from "../integrations/apna-galla/sandbox";
 import express from "express";
@@ -10,7 +11,9 @@ import { appRouter, verifyIsolatedDevDatabaseUrl } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
-export function resolveServerListenConfig(env: NodeJS.ProcessEnv = process.env): {
+export function resolveServerListenConfig(
+  env: NodeJS.ProcessEnv = process.env
+): {
   host: string;
   port: number;
 } {
@@ -62,7 +65,9 @@ export function resolveServerListenConfig(env: NodeJS.ProcessEnv = process.env):
 function parsePort(rawPort: string): number {
   const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid PORT '${rawPort}'. Must be an integer between 1 and 65535.`);
+    throw new Error(
+      `Invalid PORT '${rawPort}'. Must be an integer between 1 and 65535.`
+    );
   }
   return port;
 }
@@ -70,6 +75,7 @@ function parsePort(rawPort: string): number {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  registerMobileAuth(app);
   registerApnaVendor(app);
   registerApnaSandbox(app);
   // Configure body parser with larger size limit for file uploads
@@ -77,7 +83,10 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/platform/config.js", (_req, res) => {
-    res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
+    res
+      .set("Cache-Control", "no-store")
+      .type("application/javascript")
+      .send(publicPlatformScript());
   });
   registerOAuthRoutes(app);
   // tRPC API
@@ -96,10 +105,18 @@ async function startServer() {
   }
 
   const { host, port } = resolveServerListenConfig(process.env);
-  server.on("error", error => { console.error("Server failed:", error.message); process.exit(1); });
-  server.listen(port, host, () => console.log(`Server listening on ${host}:${port}`));
+  server.on("error", error => {
+    console.error("Server failed:", error.message);
+    process.exit(1);
+  });
+  server.listen(port, host, () =>
+    console.log(`Server listening on ${host}:${port}`)
+  );
 }
 
 if (process.env.NODE_ENV !== "test") {
-  startServer().catch(error => { console.error(error); process.exit(1); });
+  startServer().catch(error => {
+    console.error(error);
+    process.exit(1);
+  });
 }

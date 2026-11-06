@@ -1,0 +1,256 @@
+.mobile-auth-card {
+  max-width: 460px;
+  width: 100%;
+  margin: 24px auto;
+  text-align: left;
+  padding: 30px;
+  border: 1px solid #dce7d7;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 18px 55px #173d2909;
+  color: #23472e;
+}
+.mobile-auth-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 54px;
+  background: #edf5e4;
+  border-radius: 15px;
+  color: #397943;
+  margin-bottom: 22px;
+}
+.mobile-auth-card h2 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+  font-weight: 750;
+  margin: 0 0 12px;
+}
+.mobile-auth-card > p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #52684a;
+}
+.mobile-auth-card label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 24px 0 16px;
+  color: #405c38;
+}
+.mobile-auth-card input {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid #d7e2d0;
+  border-radius: 10px;
+  background: #fcfdf8;
+  padding: 13px;
+  font: inherit;
+  font-size: 16px;
+  color: #274b2a;
+  margin-top: 9px;
+  box-sizing: border-box;
+}
+.mobile-auth-phone {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d7e2d0;
+  border-radius: 10px;
+  margin-top: 9px;
+  background: #fcfdf8;
+}
+.mobile-auth-phone span {
+  padding: 0 13px;
+  border-right: 1px solid #d7e2d0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.mobile-auth-phone input {
+  border: 0;
+  background: transparent;
+  margin: 0;
+  min-width: 0;
+}
+.mobile-auth-primary {
+  min-height: 50px;
+  width: 100%;
+  border: 0;
+  background: #216d43;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 14px;
+  cursor: pointer;
+}
+.mobile-auth-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.mobile-auth-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 9px;
+}
+.mobile-auth-actions button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #356431;
+  min-height: 44px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mobile-auth-actions button:disabled {
+  color: #62745a;
+}
+.mobile-auth-card .mobile-auth-trust {
+  font-size: 11px;
+  line-height: 1.7;
+  display: flex;
+  gap: 7px;
+  margin-top: 20px;
+}
+.mobile-auth-trust svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.mobile-auth-preview {
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: #fff5d6;
+  border: 1px solid #e9dfb3;
+  border-radius: 8px;
+  color: #695b23;
+  margin: 16px 0;
+}
+.mobile-auth-card .mobile-auth-error {
+  background: #fff1ea;
+  color: #8c3528;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+.mobile-auth-disabled {
+  font-size: 13px;
+  color: #52684a;
+  padding: 15px;
+}
+.mobile-auth-card input:focus-visible,
+.mobile-auth-card button:focus-visible {
+  outline: 3px solid #4e8b44;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .mobile-auth-card {
+    padding: 24px 20px;
+    border-radius: 17px;
+  }
+  .mobile-auth-card h2 {
+    font-size: 23px;
+  }
+}
+.login-route .location-picker,
+.login-route .search-row,
+.login-route .service-area-empty {
+  display: none;
+}
+.login-route .sign-in-page {
+  padding-top: 20px;
+}
+.login-route .account-hero {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  box-shadow: none;
+}
+.login-route .account-avatar {
+  margin: 0 auto 15px;
+  width: 45px;
+  height: 45px;
+}
+.login-route .account-hero h1 {
+  font:
+    750 29px/1.2 Inter,
+    system-ui,
+    sans-serif;
+  letter-spacing: -1px;
+  margin: 10px 0;
+}
+.login-route .account-hero > .eyebrow {
+  font-size: 10px;
+}
+.login-route .account-hero > p {
+  font-size: 13px;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+.login-route .mobile-auth-card {
+  margin-top: 22px;
+}
+.login-route .mobile-auth-icon {
+  display: none;
+}
+.login-route .pilot-auth-card {
+  background: #fff !important;
+}
+.login-route .mobile-auth-trust {
+  margin-bottom: 0;
+}
+@media (max-width: 600px) {
+  .login-route .sign-in-page {
+    padding-top: 16px;
+  }
+  .login-route .account-avatar {
+    width: 38px;
+    height: 38px;
+    margin-bottom: 10px;
+  }
+  .login-route .account-hero h1 {
+    font-size: 25px;
+    margin: 8px 0;
+  }
+  .login-route .account-hero > p {
+    font-size: 12px;
+  }
+  .login-route .mobile-auth-card {
+    padding: 22px 19px;
+    margin-top: 18px;
+  }
+  .login-route .mobile-auth-card h2 {
+    font-size: 22px;
+  }
+  .login-route .mobile-auth-preview {
+    padding: 8px 10px;
+    margin: 13px 0;
+  }
+  .login-route .mobile-auth-card label {
+    margin-top: 17px;
+  }
+}
+.verified-mobile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  background: #edf5e8;
+  border: 1px solid #d1e1c8;
+  border-radius: 9px;
+  padding: 12px;
+  color: #345f30;
+  font-size: 13px;
+  margin: 12px 0 18px;
+}

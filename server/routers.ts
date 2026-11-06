@@ -1,5 +1,6 @@
 import {activeOffer,effectiveProduct} from "../shared/offers";
 import {validShopHours,withinShopHours} from '../shared/shop-hours';
+import {logoutMobileRequest} from './auth/mobile-auth';
 import {vendorBridgeContext} from "./marketplace/vendor-context";
 import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
 import { randomUUID } from "node:crypto";
@@ -30,6 +31,7 @@ import {
   categories,
   customerAddresses,
   customerProfiles,
+  customerPhoneIdentities,
   deliveryAssignments,
   financialLedger,
   favoriteShops,
@@ -907,7 +909,8 @@ export const appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      await logoutMobileRequest(ctx.req,ctx.res);
       const options = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...options, maxAge: -1 });
       return { success: true } as const;
@@ -1014,6 +1017,7 @@ export const appRouter = router({
         .limit(1);
       return {
         user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
+        verifiedMobile:ctx.user.loginMethod==='phone-otp'?(await db.select({phone:customerPhoneIdentities.phone}).from(customerPhoneIdentities).where(eq(customerPhoneIdentities.userId,ctx.user.id)).limit(1))[0]?.phone||null:null,
         role:
           ctx.user.role === "admin"
             ? "admin"
