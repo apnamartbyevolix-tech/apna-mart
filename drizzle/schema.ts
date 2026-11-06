@@ -1,6 +1,8 @@
+import type {PublicOffer} from "../shared/offers";
 import {sql} from "drizzle-orm";
 import {
   boolean,
+  primaryKey,
   datetime,
   index,
   int,
@@ -149,6 +151,7 @@ export const products = mysqlTable(
     description: text("description"),
     unit: varchar("unit", { length: 48 }).notNull(),
     pricePaise: int("pricePaise").notNull(),
+    offerMeta:json("offerMeta").$type<PublicOffer|null>(),
     mrpPaise: int("mrpPaise"),
     stockQuantity: int("stockQuantity").notNull().default(0),
     availability: mysqlEnum("availability", [
@@ -562,3 +565,8 @@ export const apnaOutbox=mysqlTable("apna_outbox",{
  requestKey:varchar("request_key",{length:36}),body:json("body"),done:boolean("done").notNull().default(false),attempts:int("attempts").notNull().default(0),
  nextAt:datetime("next_at").notNull().default(sql`CURRENT_TIMESTAMP`),leaseUntil:datetime("lease_until"),lastError:varchar("last_error",{length:200}),
 },t=>({operationKey:uniqueIndex("apna_outbox_order_id_operation_unique").on(t.orderId,t.operation)}));
+
+export const apnaVendorRequests=mysqlTable("apna_vendor_requests",{
+ merchantId:varchar("merchant_id",{length:36}).notNull().references(()=>apnaLinks.merchantId),requestKey:varchar("request_key",{length:36}).notNull(),
+ fingerprint:varchar("fingerprint",{length:64}).notNull(),response:json("response").notNull(),createdAt:timestamp("created_at").notNull().defaultNow(),
+},t=>({key:primaryKey({columns:[t.merchantId,t.requestKey]})}));

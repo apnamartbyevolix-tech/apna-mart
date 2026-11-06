@@ -1,3 +1,5 @@
+import {activeOffer,effectiveProduct} from "../shared/offers";
+import {vendorBridgeContext} from "./marketplace/vendor-context";
 import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
 import { randomUUID } from "node:crypto";
 import { connectorStatus } from './integrations/apna-galla/adapter';
@@ -62,7 +64,7 @@ const failUnavailable = () =>
   });
 const shopCategories = alias(categories, "shop_categories");
 async function database() {
-  const db = await getDb();
+  const db = (vendorBridgeContext.getStore()?.db || await getDb()) as Awaited<ReturnType<typeof getDb>>;
   if (!db) throw failUnavailable();
   return db;
 }
@@ -91,14 +93,14 @@ async function vendorFor(userId: number, approved = true) {
   const [v] = await db
     .select()
     .from(vendorProfiles)
-    .where(eq(vendorProfiles.userId, userId))
+    .where(and(eq(vendorProfiles.userId,userId),...(vendorBridgeContext.getStore()?[eq(vendorProfiles.id,vendorBridgeContext.getStore()!.vendorId)]:[])))
     .limit(1);
   if (!v)
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Vendor registration is required",
     });
-  if (approved && v.status !== "approved")
+  if (approved && v.status !== "approved" && !(vendorBridgeContext.getStore() && v.status==="suspended"))
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Vendor account is not approved",
@@ -687,7 +689,8 @@ function publicShop(
     category,
   };
 }
-function publicProduct(product: typeof products.$inferSelect) {
+function publicProduct(raw: typeof products.$inferSelect) {
+  const product=effectiveProduct(raw);
   return {
     id: product.id,
     vendorId: product.vendorId,
@@ -696,6 +699,7 @@ function publicProduct(product: typeof products.$inferSelect) {
     description: product.description,
     unit: product.unit,
     pricePaise: product.pricePaise,
+    offer:activeOffer(product.offerMeta),
     mrpPaise: product.mrpPaise,
     inStock: product.stockQuantity > 0,
     availability: product.availability,
@@ -885,6 +889,7 @@ function requireLocalMarketplace(req: any) {
   verifyIsolatedDevDatabaseUrl(process.env.DATABASE_URL);
 }
 
+const apnaVendorProcedure=protectedProcedure.use(async({next})=>{if(process.env.MTM_APNA_SANDBOX_ENABLED==='1'&&!vendorBridgeContext.getStore())throw new TRPCError({code:"FORBIDDEN",message:"Manage your shop through Apna Galla"});return next();});
 export const appRouter = router({
   system: systemRouter,
   integration: router({ status: adminProcedure.query(() => connectorStatus()) }),
@@ -1514,7 +1519,7 @@ export const appRouter = router({
           .where(and(...shopConditions))
           .limit(50);
         const productVendors = await db
-          .select({ id: vendorProfiles.id })
+          .select({ id: vendorProfiles.id,shopName:vendorProfiles.shopName })
           .from(vendorProfiles)
           .innerJoin(serviceZones, eq(vendorProfiles.zoneId, serviceZones.id))
           .innerJoin(categories, eq(vendorProfiles.categoryId, categories.id))
@@ -1560,7 +1565,7 @@ export const appRouter = router({
           shops: shops.map(x =>
             withShopRating(publicShop(x.shop, x.zone, x.category, x.townName), ratings)
           ),
-          products: foundProducts.map(row => publicProduct(row.product)),
+          products: foundProducts.map(row => ({...publicProduct(row.product),shopName:productVendors.find(v=>v.id===row.product.vendorId)?.shopName})),
         };
       }),
     shop: publicProcedure
@@ -1955,7 +1960,7 @@ export const appRouter = router({
       }),
   }),
   vendor: router({
-    status: protectedProcedure.query(async ({ ctx }) => {
+    status: apnaVendorProcedure.query(async ({ ctx }) => {
       const db = await database();
       const [v] = await db
         .select()
@@ -1964,7 +1969,7 @@ export const appRouter = router({
         .limit(1);
       return v ?? null;
     }),
-    setOpen: protectedProcedure
+    setOpen: apnaVendorProcedure
       .input(z.object({ isOpen: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const db = await database();
@@ -1975,7 +1980,7 @@ export const appRouter = router({
           .where(eq(vendorProfiles.id, vendor.id));
         return { success: true };
       }),
-    updateDeliverySettings: protectedProcedure
+    updateDeliverySettings: apnaVendorProcedure
       .input(
         z
           .object({
@@ -2013,7 +2018,7 @@ export const appRouter = router({
         await audit(ctx.user.id, "vendor.delivery_settings", "vendor", vendor.id);
         return { success: true };
       }),
-    register: protectedProcedure
+    register: apnaVendorProcedure
       .input(
         z.object({
           townId: z.number().int().positive(),
@@ -2089,7 +2094,7 @@ export const appRouter = router({
           return { id, status: "pending" as const };
         });
       }),
-    dashboard: protectedProcedure.query(async ({ ctx }) => {
+    dashboard: apnaVendorProcedure.query(async ({ ctx }) => {
       const db = await database();
       const v = await vendorFor(ctx.user.id);
       const today = new Date();
@@ -2122,7 +2127,7 @@ export const appRouter = router({
         lowStockProducts: listed.filter(p => p.stockQuantity <= 5).length,
       };
     }),
-    products: protectedProcedure.query(async ({ ctx }) => {
+    products: apnaVendorProcedure.query(async ({ ctx }) => {
       const db = await database();
       const v = await vendorFor(ctx.user.id);
       return db
@@ -2131,7 +2136,7 @@ export const appRouter = router({
         .where(eq(products.vendorId, v.id))
         .orderBy(asc(products.name));
     }),
-    createProduct: protectedProcedure
+    createProduct: apnaVendorProcedure
       .input(productInput)
       .mutation(async ({ ctx, input }) => {
         const db = await database();
@@ -2172,7 +2177,7 @@ export const appRouter = router({
           });
         return { id: Number(res[0].insertId) };
       }),
-    uploadProductImage: protectedProcedure
+    uploadProductImage: apnaVendorProcedure
       .input(imageUploadInput.extend({ productId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const db = await database();
@@ -2194,7 +2199,7 @@ export const appRouter = router({
         await audit(ctx.user.id, "product.image_upload", "product", product.id, { contentType: input.contentType, byteLength: bytes.length });
         return { imageUrl };
       }),
-    uploadStoreImage: protectedProcedure
+    uploadStoreImage: apnaVendorProcedure
       .input(imageUploadInput.extend({ imageType: z.enum(["logo", "cover"]) }))
       .mutation(async ({ ctx, input }) => {
         const db = await database();
@@ -2212,7 +2217,7 @@ export const appRouter = router({
         await audit(ctx.user.id, `vendor.${input.imageType}_upload`, "vendor", vendor.id, { contentType: input.contentType, byteLength: bytes.length });
         return { imageUrl };
       }),
-    updateProduct: protectedProcedure
+    updateProduct: apnaVendorProcedure
       .input(
         z.object({
           productId: z.number().int().positive(),
@@ -2251,7 +2256,7 @@ export const appRouter = router({
         await db.update(products).set(input.patch).where(eq(products.id, p.id));
         return { success: true };
       }),
-    archiveProduct: protectedProcedure
+    archiveProduct: apnaVendorProcedure
       .input(z.object({ productId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const db = await database();
@@ -2264,7 +2269,7 @@ export const appRouter = router({
           );
         return { success: true, result };
       }),
-    orders: protectedProcedure
+    orders: apnaVendorProcedure
       .input(z.object({ status: z.string().optional() }).optional())
       .query(async ({ ctx, input }) => {
         const db = await database();
@@ -2282,7 +2287,7 @@ export const appRouter = router({
           )
           .orderBy(desc(orders.createdAt));
       }),
-    orderDetail: protectedProcedure
+    orderDetail: apnaVendorProcedure
       .input(z.object({ orderId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await database();
@@ -2316,7 +2321,7 @@ export const appRouter = router({
             .orderBy(asc(orderEvents.createdAt)),
         };
       }),
-    updateOrderStatus: protectedProcedure
+    updateOrderStatus: apnaVendorProcedure
       .input(
         z.object({
           orderId: z.number().int().positive(),
@@ -2443,7 +2448,7 @@ export const appRouter = router({
           });
         return result;
       }),
-    recordReturnRecovery: protectedProcedure
+    recordReturnRecovery: apnaVendorProcedure
       .input(
         z.object({
           orderId: z.number().int().positive(),

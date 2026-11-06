@@ -1,3 +1,4 @@
+import {activeOffer,effectiveProduct} from "../../shared/offers";
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -218,7 +219,8 @@ export async function prepareCheckout(
       message: "One or more products are unavailable",
     });
   const items = input.items.map(i => {
-    const source = rows.find(x => x.id === i.productId)!;
+    const source = effectiveProduct(rows.find(x => x.id === i.productId)!);
+    const offer=activeOffer(source.offerMeta);if(offer?.maxPerOrder&&i.quantity>offer.maxPerOrder)throw new TRPCError({code:"BAD_REQUEST",message:`This offer allows up to ${offer.maxPerOrder} units per order`});
     // Only the server's unexpired reservation can supply this retry allowance.
     const p = { ...source, stockQuantity: Math.max(source.stockQuantity, trustedHeldStock.get(source.id) || 0) };
     if (p.stockQuantity < i.quantity)

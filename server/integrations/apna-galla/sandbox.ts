@@ -119,6 +119,7 @@ const catalogueSchema = z
             unit: z.string().min(1).max(48),
             pricePaise: z.number().int().positive().max(100000000),
             quantity: z.number().int().min(0).max(1000000),
+            offer:z.object({id:z.string().uuid(),title:z.string().min(3).max(100),festival:z.string().max(40).nullable(),referencePricePaise:z.number().int().positive(),pricePaise:z.number().int().positive(),startsAt:z.string().datetime(),endsAt:z.string().datetime(),maxPerOrder:z.number().int().positive().max(100).nullable()}).nullable().optional(),
           })
           .strict()
       )
@@ -261,6 +262,7 @@ export function registerApnaSandbox(app: Express) {
               name: i.name,
               unit: i.unit,
               pricePaise: i.pricePaise,
+              offerMeta:i.offer||null,
               stockQuantity: i.quantity,
               availability: "available" as const,
             };

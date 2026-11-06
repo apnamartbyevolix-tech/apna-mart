@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerApnaVendor } from "../integrations/apna-galla/vendor-http";
 import { registerApnaSandbox } from "../integrations/apna-galla/sandbox";
 import express from "express";
 import { createServer } from "http";
@@ -69,6 +70,7 @@ function parsePort(rawPort: string): number {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  registerApnaVendor(app);
   registerApnaSandbox(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
