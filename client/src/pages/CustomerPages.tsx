@@ -385,7 +385,8 @@ export function OrderDetailPage({ id }: { id: string }) {
           <>
             <div className="page-intro">
               <p className="eyebrow">ORDER {data.order.orderNumber}</p>
-              <h1>{data.order.status.replaceAll("_", " ")}</h1>
+              <h1>{data.apnaSync?.pending ? "Awaiting shop confirmation" : data.order.status.replaceAll("_", " ")}</h1>
+              {data.apnaSync?.pending && <p role="status">Your order was received. Stock confirmation is pending; please do not place it again.</p>}
               <Button variant="outline" disabled={q.isFetching} onClick={() => void q.refetch()}>{q.isFetching ? "Refreshing…" : "Refresh order"}</Button>
               <p>
                 {new Date(data.order.createdAt).toLocaleString()} ·{" "}

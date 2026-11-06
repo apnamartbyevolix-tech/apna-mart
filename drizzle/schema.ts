@@ -1,5 +1,7 @@
+import {sql} from "drizzle-orm";
 import {
   boolean,
+  datetime,
   index,
   int,
   json,
@@ -538,3 +540,25 @@ export const shopReviews = mysqlTable(
     customerIx: index("shop_reviews_customer_ix").on(t.customerId, t.createdAt),
   })
 );
+
+// Local integration persistence. Public activation remains disabled outside the isolated sandbox.
+export const apnaLinks=mysqlTable("apna_links",{
+ merchantId:varchar("merchant_id",{length:36}).primaryKey(),
+ vendorId:int("vendor_id").notNull().unique().references(()=>vendorProfiles.id),
+ version:int("version").notNull(),live:boolean("live").notNull(),
+ expiresAt:datetime("expires_at").notNull(),verifiedAt:datetime("verified_at").notNull(),
+});
+export const apnaProducts=mysqlTable("apna_products",{
+ productId:int("product_id").primaryKey().references(()=>products.id),
+ vendorId:int("vendor_id").notNull().references(()=>vendorProfiles.id),sku:varchar("sku",{length:100}).notNull(),
+},t=>({pair:uniqueIndex("apna_products_vendor_id_sku_unique").on(t.vendorId,t.sku)}));
+export const apnaCheckouts=mysqlTable("apna_checkouts",{
+ reference:varchar("reference",{length:64}).primaryKey(),merchantId:varchar("merchant_id",{length:36}).notNull().references(()=>apnaLinks.merchantId),
+ vendorId:int("vendor_id").notNull(),requestKey:varchar("request_key",{length:36}).notNull(),body:json("body").notNull(),response:json("response"),
+ orderId:int("order_id").unique().references(()=>orders.id),state:varchar("state",{length:20}).notNull().default("HOLD"),createdAt:datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+export const apnaOutbox=mysqlTable("apna_outbox",{
+ id:int("id").autoincrement().primaryKey(),orderId:int("order_id").notNull().references(()=>orders.id),operation:varchar("operation",{length:20}).notNull(),
+ requestKey:varchar("request_key",{length:36}),body:json("body"),done:boolean("done").notNull().default(false),attempts:int("attempts").notNull().default(0),
+ nextAt:datetime("next_at").notNull().default(sql`CURRENT_TIMESTAMP`),leaseUntil:datetime("lease_until"),lastError:varchar("last_error",{length:200}),
+},t=>({operationKey:uniqueIndex("apna_outbox_order_id_operation_unique").on(t.orderId,t.operation)}));

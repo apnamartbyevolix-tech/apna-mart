@@ -55,7 +55,8 @@ export async function duplicateCheckout(
 export async function prepareCheckout(
   tx: Transaction,
   input: CheckoutInput,
-  user: Pick<User, "id" | "name">
+  user: Pick<User, "id" | "name">,
+  trustedHeldStock: ReadonlyMap<number,number> = new Map()
 ) {
   if (
     (input.fulfillmentType === "delivery" && input.paymentMethod !== "cod") ||
@@ -217,7 +218,9 @@ export async function prepareCheckout(
       message: "One or more products are unavailable",
     });
   const items = input.items.map(i => {
-    const p = rows.find(x => x.id === i.productId)!;
+    const source = rows.find(x => x.id === i.productId)!;
+    // Only the server's unexpired reservation can supply this retry allowance.
+    const p = { ...source, stockQuantity: Math.max(source.stockQuantity, trustedHeldStock.get(source.id) || 0) };
     if (p.stockQuantity < i.quantity)
       throw new TRPCError({
         code: "CONFLICT",

@@ -1,3 +1,4 @@
+import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
 import { randomUUID } from "node:crypto";
 import { connectorStatus } from './integrations/apna-galla/adapter';
 import { answerLocalHelp, localAssistantEnabled } from './marketplace/local-assistant';
@@ -1703,6 +1704,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (prior) return duplicateCheckout(db, prior, input, ctx.user.id);
+        const apnaHold = await reserveForCheckout(db, input, ctx.user);
         try {
           return await db.transaction(async tx => {
             // Serialize this customer's retries before stock checks, including last-unit retries.
@@ -1714,7 +1716,7 @@ export const appRouter = router({
               .limit(1);
             if (existing) return duplicateCheckout(tx, existing, input, ctx.user.id);
             const { shop, items, totals, zoneId, addressSnapshot, custName, custPhone, quote } =
-              await prepareCheckout(tx, input, ctx.user);
+              await prepareCheckout(tx, input, ctx.user, await trustedCheckoutStock(tx,input,ctx.user.id));
             if (input.quoteFingerprint !== quote.quoteFingerprint)
               throw new TRPCError({
                 code: "CONFLICT",
@@ -1803,6 +1805,7 @@ export const appRouter = router({
                   platformFeePaise: totals.platformFeePaise,
                 })
               );
+            await attachCheckout(tx, apnaHold, orderId, orderNumber);
             return { orderId, orderNumber, duplicate: false, totals };
           });
         } catch (error) {
@@ -1862,6 +1865,7 @@ export const appRouter = router({
         }).from(shopReviews).where(eq(shopReviews.orderId, row.id)).limit(1);
         return {
           order: row,
+          apnaSync: await orderSyncStatus(db,row.id),
           review: review ?? null,
           handoverCode:
             !row.handoverLockedAt && (
