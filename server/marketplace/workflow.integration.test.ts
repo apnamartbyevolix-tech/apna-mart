@@ -393,6 +393,26 @@ const workflow = describe.skipIf(!integrationEnabled)(
       await expect(owner.marketplace.placeOrder({ ...input, quoteFingerprint: updated.quoteFingerprint })).resolves.toMatchObject({ duplicate: false });
     });
 
+    it("keeps the default address unchanged when an address update is rejected", async () => {
+      const owner = caller(await createUser("def-own"));
+      const stranger = caller(await createUser("def-other"));
+      const values = { townId, zoneId, label: "Home", recipientName: "Isolated customer", phone: "9999900000", line1: "Fictional address", isDefault: true };
+      const own = await owner.account.saveAddress(values);
+      const foreign = await stranger.account.saveAddress(values);
+      await expect(owner.account.saveAddress({ ...values, id: foreign.id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await owner.account.addresses()).toEqual(expect.arrayContaining([expect.objectContaining({ id: own.id, isDefault: true })]));
+      expect(await stranger.account.addresses()).toEqual(expect.arrayContaining([expect.objectContaining({ id: foreign.id, isDefault: true })]));
+    });
+
+    it("serializes concurrent default address changes for one customer", async () => {
+      const owner = caller(await createUser("def-race"));
+      const values = { townId, zoneId, label: "Home", recipientName: "Isolated customer", phone: "9999900000", line1: "Fictional address", isDefault: true };
+      await Promise.all([owner.account.saveAddress(values), owner.account.saveAddress({ ...values, label: "Work" })]);
+      const addresses = await owner.account.addresses();
+      expect(addresses).toHaveLength(2);
+      expect(addresses.filter(address => address.isDefault)).toHaveLength(1);
+    });
+
     it("fails closed on retrying legacy orders without a stored request fingerprint", async () => {
       const { input } = await quotedFixture();
       const created = await caller(customer).marketplace.placeOrder(input);

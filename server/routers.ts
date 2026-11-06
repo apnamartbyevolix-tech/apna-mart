@@ -1143,11 +1143,6 @@ export const appRouter = router({
             code: "BAD_REQUEST",
             message: "Choose an active service area",
           });
-        if (input.isDefault)
-          await db
-            .update(customerAddresses)
-            .set({ isDefault: false })
-            .where(eq(customerAddresses.userId, ctx.user.id));
         const values = {
           userId: ctx.user.id,
           townId: input.townId,
@@ -1161,26 +1156,28 @@ export const appRouter = router({
           postalCode: input.postalCode ?? null,
           isDefault: input.isDefault,
         };
-        if (input.id) {
-          const [existing] = await db
-            .select({ id: customerAddresses.id })
-            .from(customerAddresses)
-            .where(
-              and(
-                eq(customerAddresses.id, input.id),
-                eq(customerAddresses.userId, ctx.user.id)
-              )
-            )
-            .limit(1);
-          if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-          await db
-            .update(customerAddresses)
-            .set(values)
-            .where(eq(customerAddresses.id, input.id));
-          return { id: input.id };
-        }
-        const result = await db.insert(customerAddresses).values(values);
-        return { id: Number(result[0].insertId) };
+        return db.transaction(async tx => {
+          // Serialize this customer's address changes, including concurrent first defaults.
+          await tx.select({ id: users.id }).from(users)
+            .where(eq(users.id, ctx.user.id)).for("update").limit(1);
+          if (input.id) {
+            const [existing] = await tx.select({ id: customerAddresses.id })
+              .from(customerAddresses)
+              .where(and(eq(customerAddresses.id, input.id), eq(customerAddresses.userId, ctx.user.id)))
+              .for("update").limit(1);
+            if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          if (input.isDefault)
+            await tx.update(customerAddresses).set({ isDefault: false })
+              .where(eq(customerAddresses.userId, ctx.user.id));
+          if (input.id) {
+            await tx.update(customerAddresses).set(values)
+              .where(and(eq(customerAddresses.id, input.id), eq(customerAddresses.userId, ctx.user.id)));
+            return { id: input.id };
+          }
+          const result = await tx.insert(customerAddresses).values(values);
+          return { id: Number(result[0].insertId) };
+        });
       }),
   }),
   customer: router({
