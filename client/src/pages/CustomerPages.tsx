@@ -226,7 +226,7 @@ export function OrdersPage() {
           <span className="account-avatar">
             <UserRound />
           </span>
-          <p className="eyebrow">YOUR MYTOWN ACCOUNT</p>
+          <p className="eyebrow">YOUR APNA MART ACCOUNT</p>
           <h1>Sign in to see your orders.</h1>
           <p>Use the real Manus sign-in flow.</p>
           <LoginButton>Continue with Manus</LoginButton>
@@ -1118,7 +1118,7 @@ export function SignInPage() {
           <ShieldCheck />
         </span>
         <p className="eyebrow">YOUR TOWN, YOUR EVERYDAY</p>
-        <h1>{auth.user ? "You're signed in." : "Sign in to MyTown Market"}</h1>
+        <h1>{auth.user ? "You're signed in." : "Sign in to Apna Mart"}</h1>
         <p>
           {auth.user
             ? `Signed in as ${auth.user.name || auth.user.email || "User"} (${auth.user.role === "admin" ? "Administrator" : "Standard user"}).`

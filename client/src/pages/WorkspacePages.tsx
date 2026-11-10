@@ -164,7 +164,7 @@ function WorkspaceLayout({
             <span className="brand-leaf" />
           </span>
           <span>
-            MyTown
+            Apna Mart
             <br />
             <b>{title}</b>
           </span>
@@ -353,7 +353,7 @@ function VendorSignup() {
       <div className="page-wrap">
         <div className="workspace-gate">
           <Store />
-          <p className="eyebrow">SELL ON MYTOWN</p>
+          <p className="eyebrow">SELL ON APNA MART</p>
           <h1>Bring your shop closer to home.</h1>
           <p>Secure sign-in is required before applying.</p>
           <LoginButton />

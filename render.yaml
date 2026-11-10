@@ -1,0 +1,49 @@
+# Deployment candidate. Apply only after the MySQL, SMS and production connector
+# checks in docs/APNA_MART_DEPLOYMENT.md are complete and hosting is approved.
+services:
+  - type: web
+    name: apna-mart
+    runtime: node
+    repo: https://github.com/apnamartbyevolix-tech/apna-mart
+    branch: main
+    region: singapore
+    plan: 0.5c-512mb
+    autoDeployTrigger: off
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    preDeployCommand: pnpm db:migrate
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.11.1
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false
+      - key: MANUS_JWT_SECRET
+        sync: false
+      - key: MTM_CUSTOMER_AUTH_ENABLED
+        value: "1"
+      - key: MTM_AUTH_ORIGINS
+        value: https://apna-mart.in
+      - key: MTM_OTP_SECRET
+        sync: false
+      - key: MTM_SMS_PROVIDER
+        value: apitxt
+      - key: APITXT_AUTH_KEY
+        sync: false
+      # The localhost-only connector cannot be enabled on a hosted service.
+      - key: MTM_APNA_SANDBOX_ENABLED
+        value: "0"
+      - key: MTM_ENABLE_DEV_AUTH
+        value: "0"
+      - key: ALLOW_STANDALONE_DEV_LOGIN
+        value: "0"
+      - key: ALLOW_DEV_ADMIN_LOGIN
+        value: "0"
+      - key: MTM_RUN_ISOLATED_DB_TESTS
+        value: "0"
+      - key: MTM_LOCAL_ASSISTANT_ENABLED
+        value: "0"

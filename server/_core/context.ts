@@ -27,7 +27,7 @@ export async function createContext(
     if (error instanceof MobileAuthError)
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Open MyTown directly and try again.",
+        message: "Open Apna Mart directly and try again.",
       });
     // Authentication is optional for public procedures.
     user = null;

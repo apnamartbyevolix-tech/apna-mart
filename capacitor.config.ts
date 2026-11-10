@@ -12,7 +12,7 @@ if (
 
 const config: CapacitorConfig = {
   appId: "in.mytownmarket.customer.preview",
-  appName: "MyTown Market Preview",
+  appName: "Apna Mart Preview",
   webDir: "dist/public",
   ...(preview ? { server: { url: preview, cleartext: true } } : {}),
 };

@@ -281,14 +281,14 @@ export function LoginButton({
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="brand-lockup" aria-label="MyTown Market home">
+    <Link href="/" className="brand-lockup" aria-label="Apna Mart home">
       <span className="brand-symbol">
         <MapPin className="size-5" strokeWidth={2.4} />
         <span className="brand-leaf" />
       </span>
       {!compact && (
         <span className="brand-wordmark">
-          MyTown <b>Market</b>
+          Apna <b>Mart</b>
         </span>
       )}
     </Link>
