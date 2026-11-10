@@ -1,5 +1,5 @@
 # Deployment candidate. Apply only after the MySQL, SMS and production connector
-# checks in docs/APNA_MART_DEPLOYMENT.md are complete and hosting is approved.
+# checks in docs/APNA_MART_DEPLOYMENT.md are complete. Keep this on the free plan.
 services:
   - type: web
     name: apna-mart
@@ -7,11 +7,12 @@ services:
     repo: https://github.com/apnamartbyevolix-tech/apna-mart
     branch: main
     region: singapore
-    plan: 0.5c-512mb
+    plan: free
     autoDeployTrigger: off
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
-    preDeployCommand: pnpm db:migrate
-    startCommand: pnpm start
+    # Free services do not support pre-deploy commands. A migration failure
+    # stops startup, so the new API/UI is not served against an older schema.
+    startCommand: pnpm db:migrate && pnpm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION

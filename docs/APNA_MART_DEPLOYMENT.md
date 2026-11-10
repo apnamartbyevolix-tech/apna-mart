@@ -11,19 +11,40 @@ this application to PostgreSQL.
 - Render workspace: `apna's workspace`, owned by `apnamartbyevolix@gmail.com`.
 - Domain: `https://apna-mart.in`.
 - One Render Node service serves Express and the compiled React application.
-- Use a separate managed MySQL database with verified TLS and backups.
+- Use a separate free managed MySQL-compatible database with verified TLS.
+  Verify its actual free allowance, trigger support, retention and backup limits
+  before provisioning. A paid trial credit is not a permanent free plan.
 - Cloudflare manages the domain/DNS. Apna Galla keeps its existing hosts and
   database; its shop records and operator account are preserved.
 
 `render.yaml` is a configuration candidate, not evidence of a working launch.
-It proposes Singapore and the smallest paid web compute plan; confirm the
-database region and the owner's spending approval before provisioning.
+It selects Singapore and Render's free web compute plan. The owner rejected
+paid hosting on 10 November 2026. Do not upgrade, add payment details or enable
+paid usage to make deployment succeed. Keep the database within a real free
+plan as well. Confirm its region before provisioning.
 Automatic deployment is explicitly off until the connected release passes.
 
 The build installs the locked dependencies and produces the browser and server
-bundles. The pre-deploy step applies the checked-in Drizzle migrations before
-the new server starts. Never run the demo seeder against production. Review
-the database backup and test these migrations in isolated staging first.
+bundles. Free Render services do not support a pre-deploy command. Instead,
+the start command applies the checked-in Drizzle migrations and starts the
+server only if they succeed. Never run the demo seeder against production.
+Review the database backup and test these migrations in isolated staging first.
+
+Free Render services sleep after inactivity. This configuration does not
+promise an always-running backend or instant first requests. Scheduled
+keep-alive requests are not part of this deployment.
+
+## Database compatibility check
+
+The MySQL migration `0009_apna_sandbox.sql` installs two triggers to protect
+order transitions and queue durable ERP synchronization work. TiDB does not
+support triggers, so its free MySQL-compatible plan cannot run the existing
+schema unchanged. Do not silently omit those triggers or bypass their checks.
+
+MariaDB Cloud advertises a free serverless developer option and supports
+row-level triggers. It is a candidate, pending account-level confirmation of
+the free option and a full compatibility check, including JSON values and
+idempotency. Provider login and a product label alone do not prove the app works.
 
 ## Secret configuration
 
