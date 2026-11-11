@@ -37,9 +37,13 @@ Test evidence: D:/Codex Output/Apna galla production chat (3)/Apna Mart Launch/2
 All database-mutating automated tests used dedicated disposable localhost
 *_test databases and fictional accounts. Operator accounts were preserved.
 
-Rollout remains gated on the Galla migration-owner connection, final builds,
-secret checks, deployment status and HTTPS/domain verification. Its runtime
-account correctly lacks migration permission; do not grant it extra privileges.
+The November 11 rollout applied both Mart migrations and four additive Galla
+migrations through the separate existing evolix_migrator account. The runtime
+account remains unchanged. Both Render services are live; apna-mart.in serves
+the database readiness endpoint over verified HTTPS. The Galla frontend release
+marker confirms the owner-controlled shop workspace release. Signed validation
+checks reached both peers, while invalid signatures were rejected before any
+database mutation. Secret scans passed for both repositories.
 Real SMS delivery and physical-phone acceptance are not established by local
 simulated tests. Never represent these checks as production load testing.
 

@@ -44,3 +44,13 @@ No keep-alive cron, paid upgrade or payment method is part of this deployment.
 
 See NEON_MIGRATION.md for validation and rollout status. Keep production secrets
 and private deployment evidence in the protected local launch folder.
+
+## Installable Android test build
+
+Set MTM_ANDROID_LIVE_TEST=1 when running pnpm android:sync to connect the debug
+APK to exactly https://apna-mart.in. It uses same-origin browser authentication
+and contains no service credentials. This mode cannot be combined with the
+localhost preview or MTM_ANDROID_RELEASE=1. Gradle also rejects release tasks
+when a remote preview URL remains in the native config. The .debug package and
+test label distinguish this install from a reviewed store release. Physical
+phone acceptance and Play signing remain separate; do not upload a debug APK.
