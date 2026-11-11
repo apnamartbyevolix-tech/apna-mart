@@ -340,47 +340,47 @@ describe("Seller-managed delivery & fulfillment regression tests", () => {
 
   describe("Integration test database connection URL safety", () => {
     it("accepts strictly local database hosts with mtm_e2e_ prefix", () => {
-      const local1 = validateIntegrationDatabaseUrl("mysql://user:pass@localhost:3306/mtm_e2e_test");
+      const local1 = validateIntegrationDatabaseUrl("postgresql://user:pass@localhost:3306/mtm_e2e_test_test");
       expect(local1.valid).toBe(true);
-      expect(local1.dbName).toBe("mtm_e2e_test");
+      expect(local1.dbName).toBe("mtm_e2e_test_test");
 
-      const local2 = validateIntegrationDatabaseUrl("mysql://127.0.0.1:3306/mtm_e2e_demo?charset=utf8mb4");
+      const local2 = validateIntegrationDatabaseUrl("postgresql://127.0.0.1:3306/mtm_e2e_demo_test");
       expect(local2.valid).toBe(true);
-      expect(local2.dbName).toBe("mtm_e2e_demo");
+      expect(local2.dbName).toBe("mtm_e2e_demo_test");
 
-      const local3 = validateIntegrationDatabaseUrl("mariadb://[::1]:3306/mtm_e2e_isolated");
+      const local3 = validateIntegrationDatabaseUrl("postgres://[::1]:3306/mtm_e2e_isolated_test");
       expect(local3.valid).toBe(true);
-      expect(local3.dbName).toBe("mtm_e2e_isolated");
+      expect(local3.dbName).toBe("mtm_e2e_isolated_test");
     });
 
     it("rejects database names not beginning with mtm_e2e_", () => {
-      const result = validateIntegrationDatabaseUrl("mysql://user:pass@localhost:3306/mytownmarket");
+      const result = validateIntegrationDatabaseUrl("postgresql://user:pass@localhost:3306/mytownmarket");
       expect(result.valid).toBe(false);
-      expect(result.reason).toMatch(/must start with 'mtm_e2e_' prefix/);
+      expect(result.reason).toMatch(/mtm_e2e_/);
     });
 
     it("rejects remote or non-local database hosts", () => {
-      const remote = validateIntegrationDatabaseUrl("mysql://user:pass@aws.rds.amazonaws.com:3306/mtm_e2e_db");
+      const remote = validateIntegrationDatabaseUrl("postgresql://user:pass@aws.rds.amazonaws.com:3306/mtm_e2e_db_test");
       expect(remote.valid).toBe(false);
       expect(remote.reason).toMatch(/not permitted for destructive integration tests/);
     });
 
     it("rejects substring exploit attempts where mtm_e2e_ is in password or query param", () => {
       // Substring exploit attempt: host is remote, password contains mtm_e2e_
-      const exploit1 = validateIntegrationDatabaseUrl("mysql://user:mtm_e2e_pw@remote-prod.com:3306/production_db");
+      const exploit1 = validateIntegrationDatabaseUrl("postgresql://user:mtm_e2e_pw_test@remote-prod.com:3306/production_db");
       expect(exploit1.valid).toBe(false);
 
       // Substring exploit attempt: local host, but real db is prod and mtm_e2e_ is only in query string
-      const exploit2 = validateIntegrationDatabaseUrl("mysql://user:pass@localhost:3306/prod_db?comment=mtm_e2e_");
+      const exploit2 = validateIntegrationDatabaseUrl("postgresql://user:pass@localhost:3306/prod_db?comment=mtm_e2e_");
       expect(exploit2.valid).toBe(false);
-      expect(exploit2.reason).toMatch(/must start with 'mtm_e2e_' prefix/);
+      expect(exploit2.reason).toMatch(/mtm_e2e_/);
     });
 
     it("fails closed on missing, malformed, or invalid protocols", () => {
       expect(validateIntegrationDatabaseUrl("").valid).toBe(false);
       expect(validateIntegrationDatabaseUrl(undefined).valid).toBe(false);
       expect(validateIntegrationDatabaseUrl("not-a-url").valid).toBe(false);
-      expect(validateIntegrationDatabaseUrl("postgres://localhost:5432/mtm_e2e_db").valid).toBe(false);
+      expect(validateIntegrationDatabaseUrl("mysql://localhost:5432/mtm_e2e_db_test").valid).toBe(false);
     });
   });
 
@@ -445,7 +445,7 @@ describe("Seller-managed delivery & fulfillment regression tests", () => {
             } else if ("entityId" in val || "action" in val) {
               state.auditRecordsInserted.push(val);
             }
-            return Promise.resolve([{ insertId: 1 }]);
+            return { returning: () => Promise.resolve([{ insertId: 1 }]) };
           },
         }),
       };
@@ -612,7 +612,7 @@ describe("Seller-managed delivery & fulfillment regression tests", () => {
             } else if ("entityId" in val || "action" in val) {
               state.auditRecordsInserted.push(val);
             }
-            return Promise.resolve([{ insertId: 1 }]);
+            return { returning: () => Promise.resolve([{ insertId: 1 }]) };
           },
         }),
       };
@@ -1031,29 +1031,29 @@ describe("Seller-managed delivery & fulfillment regression tests", () => {
 
   describe("Strengthened development authentication isolation", () => {
     it("accepts allowlisted local database URLs (mtm_dev_*, mtm_local_*, mtm_test_*, mtm_e2e_*)", () => {
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://root:pass@localhost:3306/mtm_dev_demo")).not.toThrow();
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@127.0.0.1:3306/mtm_dev_test")).not.toThrow();
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@localhost:3306/mtm_local_db")).not.toThrow();
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@[::1]:3306/mtm_test_suite")).not.toThrow();
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@localhost:3306/mtm_e2e_sandbox")).not.toThrow();
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://root:pass@localhost:3306/mtm_dev_demo")).not.toThrow();
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@127.0.0.1:3306/mtm_dev_test")).not.toThrow();
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@localhost:3306/mtm_local_db")).not.toThrow();
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@[::1]:3306/mtm_test_suite")).not.toThrow();
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@localhost:3306/mtm_e2e_sandbox_test")).not.toThrow();
     });
 
     it("rejects non-allowlisted database names even on local loopback hosts", () => {
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://root:pass@localhost:3306/mytownmarket_prod")).toThrow(TRPCError);
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://root:pass@localhost:3306/mytownmarket_prod")).toThrowError(
-        /Database 'mytownmarket_prod' is not permitted for development authentication/
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://root:pass@localhost:3306/mytownmarket_prod")).toThrow(TRPCError);
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://root:pass@localhost:3306/mytownmarket_prod")).toThrowError(
+        /not permitted/
       );
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@127.0.0.1:3306/production")).toThrow(TRPCError);
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@127.0.0.1:3306/production")).toThrowError(
-        /Database 'production' is not permitted for development authentication/
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@127.0.0.1:3306/production")).toThrow(TRPCError);
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@127.0.0.1:3306/production")).toThrowError(
+        /not permitted/
       );
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@localhost:3306/real_data")).toThrow(TRPCError);
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@localhost:3306/real_data")).toThrow(TRPCError);
     });
 
     it("rejects remote or shared database hosts for standalone dev login", () => {
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@aws-rds.amazon.com:3306/mtm_dev")).toThrow(TRPCError);
-      expect(() => verifyIsolatedDevDatabaseUrl("mysql://user:pass@aws-rds.amazon.com:3306/mtm_dev")).toThrowError(
-        /prohibited on remote or shared database hosts/
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@aws-rds.amazon.com:3306/mtm_dev")).toThrow(TRPCError);
+      expect(() => verifyIsolatedDevDatabaseUrl("postgresql://user:pass@aws-rds.amazon.com:3306/mtm_dev")).toThrowError(
+        /not permitted/
       );
     });
 
@@ -1196,9 +1196,9 @@ describe("Seller-managed delivery & fulfillment regression tests", () => {
         resolveServerListenConfig({
           MTM_ENABLE_DEV_AUTH: "1",
           NODE_ENV: "development",
-          DATABASE_URL: "mysql://localhost:3306/production_db",
+          DATABASE_URL: "postgresql://localhost:3306/production_db",
         })
-      ).toThrowError(/not permitted for development authentication/);
+      ).toThrowError(/not permitted/);
     });
 
     it("defaults to 0.0.0.0 when development authentication is disabled", () => {

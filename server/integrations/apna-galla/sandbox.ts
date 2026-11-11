@@ -19,17 +19,28 @@ import {
   orders,
   paymentRecords,
   orderItems,
+  towns, serviceZones, categories, users,
 } from "../../../drizzle/schema";
 import { SignedSandboxTransport } from "./transport";
 import type { Operation } from "./adapter";
 import { prepareCheckout } from "../../marketplace/checkout";
 
 export const sandboxEnabled = () =>
-  process.env.MTM_APNA_SANDBOX_ENABLED === "1";
+  process.env.MTM_APNA_SANDBOX_ENABLED === "1" || process.env.MTM_APNA_CONNECTOR_MODE === "production";
+export const productionConnector = () => process.env.MTM_APNA_CONNECTOR_MODE === "production";
+export const protocolRevision = () => productionConnector() ? "1.2" : "1.2-sandbox";
 export function assertSandbox() {
   validateLinkAuth();
   const u = new URL(process.env.DATABASE_URL || "");
   const peer = new URL(process.env.APNA_SANDBOX_URL || "");
+  if (productionConnector()) {
+    if (process.env.NODE_ENV !== "production" || process.env.MTM_APNA_SANDBOX_ENABLED === "1" ||
+        !["postgres:","postgresql:"].includes(u.protocol) || ["localhost","127.0.0.1","[::1]"].includes(u.hostname) ||
+        peer.href !== "https://api.apnagalla.in/" || process.env.MYTOWN_LINK_AUTH !== "ed25519-v1" || process.env.MYTOWN_LINK_SELF !== "mytown" ||
+        (process.env.APNA_SANDBOX_KEY||"").length<32 || (process.env.APNA_SANDBOX_SECRET||"").length<32)
+      throw Error("Explicit production Apna Galla connection with pinned server identities is required");
+    return;
+  }
   if (
     !sandboxEnabled() ||
     process.env.NODE_ENV === "production" ||
@@ -50,7 +61,7 @@ export function assertSandbox() {
 }
 const rows = async (db: any, q: any): Promise<any[]> => {
   const r = await db.execute(q);
-  return r[0] as any[];
+  return r.rows as any[];
 };
 const canonical = (v: any): string =>
   Array.isArray(v)
@@ -68,14 +79,14 @@ function transport() {
   assertSandbox();
   return new SignedSandboxTransport({
     baseUrl: process.env.APNA_SANDBOX_URL!,
-    allowedSandboxHosts: ["localhost"],
+    allowedSandboxHosts: productionConnector() ? ["api.apnagalla.in"] : ["localhost"],
     apiKey: process.env.APNA_SANDBOX_KEY!,
     signingSecret: process.env.APNA_SANDBOX_SECRET!,
     encodeSignature: d => d.toString("hex"),
   });
 }
 const wire = (op: Operation, b: any, key: string) =>
-  transport().post(op, { revision: "1.2-sandbox", ...b }, key);
+  transport().post(op, { ...b, revision: protocolRevision() }, key);
 const unavailable = () =>
   new TRPCError({
     code: "PRECONDITION_FAILED",
@@ -99,11 +110,11 @@ async function verify(merchantId: string) {
 
 const catalogueSchema = z
   .object({
-    revision: z.literal("1.2-sandbox"),
+    revision: z.enum(["1.2-sandbox", "1.2"]),
     merchantId: z.string().uuid(),
     version: z.number().int().positive(),
     live: z.boolean(),
-    shop: z.object({ name: z.string().trim().min(2).max(100) }).strict(),
+    shop: z.object({ name: z.string().trim().min(2).max(100), city:z.string().trim().min(2).max(100).optional(), state:z.string().trim().min(2).max(100).optional(), address:z.string().trim().min(3).max(1000).optional(), postalCode:z.string().regex(/^\d{6}$/).optional(), phone:z.string().max(50).optional() }).strict(),
     eligibility: z
       .object({
         isValid: z.boolean(),
@@ -195,6 +206,8 @@ export function registerApnaSandbox(app: Express) {
         }
         try{verifyConnection('apna',req.method,req.originalUrl,raw,req.headers);}catch{res.status(401).json({message:'Invalid server signature'});return;}
         const b = catalogueSchema.parse(JSON.parse(raw.toString("utf8")));
+        if(b.revision!==protocolRevision()) throw Error("Connector revision does not match this deployment");
+        if(productionConnector() && b.live && (!b.shop.city||!b.shop.state||!b.shop.address)) throw Error("A real public shop address is required");
         if (new Set(b.items.map(i => i.sku)).size !== b.items.length)
           throw Error("Duplicate SKU");
         const db = await getDb();
@@ -212,10 +225,29 @@ export function registerApnaSandbox(app: Express) {
             )
           )[0];
           if (existing && existing.version >= b.version) return;
-          const townId = Number(process.env.APNA_SANDBOX_TOWN_ID),
+          let townId = Number(process.env.APNA_SANDBOX_TOWN_ID),
             zoneId = Number(process.env.APNA_SANDBOX_ZONE_ID),
             categoryId = Number(process.env.APNA_SANDBOX_CATEGORY_ID),
             userId = Number(process.env.APNA_SANDBOX_VENDOR_USER_ID);
+          if(productionConnector()) {
+            if(!b.live && !existing) return;
+            if(!b.live) {
+              await tx.update(vendorProfiles).set({status:"suspended",isOpen:false}).where(eq(vendorProfiles.id,existing.vendor_id));
+              await tx.execute(sql`UPDATE apna_links SET live=false,version=${b.version},verified_at=now() WHERE merchant_id=${b.merchantId}`);
+              return;
+            }
+            const townSlug="in-"+createHash("sha256").update(b.shop.state!.toLowerCase()+":"+b.shop.city!.toLowerCase()).digest("hex").slice(0,24);
+            await tx.insert(towns).values({slug:townSlug,name:b.shop.city!,state:b.shop.state!,isDemo:false}).onConflictDoNothing();
+            const [town]=await tx.select().from(towns).where(eq(towns.slug,townSlug)); townId=town.id;
+            const zoneSlug=b.shop.postalCode||townSlug;
+            await tx.insert(serviceZones).values({townId,slug:zoneSlug,name:b.shop.postalCode||b.shop.city!,locality:b.shop.postalCode||b.shop.city!}).onConflictDoNothing();
+            const [zone]=await tx.select().from(serviceZones).where(sql`${serviceZones.townId}=${townId} AND ${serviceZones.slug}=${zoneSlug}`); zoneId=zone.id;
+            await tx.insert(categories).values({slug:"local-shops",name:"Local shops"}).onConflictDoNothing();
+            const [category]=await tx.select().from(categories).where(eq(categories.slug,"local-shops")); categoryId=category.id;
+            const openId="apna-shop-"+b.merchantId;
+            await tx.insert(users).values({openId,name:b.shop.name,loginMethod:"erp-managed",role:"user"}).onConflictDoNothing();
+            const [owner]=await tx.select().from(users).where(eq(users.openId,openId)); userId=owner.id;
+          }
           if (
             ![townId, zoneId, categoryId, userId].every(
               x => Number.isSafeInteger(x) && x > 0
@@ -233,13 +265,14 @@ export function registerApnaSandbox(app: Express) {
                 categoryId,
                 slug: "apna-" + b.merchantId,
                 shopName: b.shop.name,
-                address: "Demo Bazaar · sandbox test location",
-                isDemo: true,
+                address: productionConnector() ? b.shop.address! : "Demo Bazaar · sandbox test location",
+                phone:productionConnector() ? b.shop.phone : undefined,
+                isDemo: !productionConnector(),
                 status: "pending",
                 isOpen: false,
                 deliveryEnabled: true,
                 pickupEnabled: true,
-              });
+              }).returning({ insertId: vendorProfiles.id });
             vendorId = Number(v[0].insertId);
             await tx.insert(vendorCategories).values({ vendorId, categoryId });
           }
@@ -248,6 +281,7 @@ export function registerApnaSandbox(app: Express) {
             .update(vendorProfiles)
             .set({
               shopName: b.shop.name,
+              ...(productionConnector()?{address:b.shop.address!,phone:b.shop.phone,townId,zoneId}:{}),
               status: b.live ? "approved" : "suspended",
               isOpen: b.live&&withinShopHours(hours?.settings),
             })
@@ -290,8 +324,8 @@ export function registerApnaSandbox(app: Express) {
                       .update(i.sku)
                       .digest("hex")
                       .slice(0, 24),
-                  isDemo: true,
-                });
+                  isDemo: !productionConnector(),
+                }).returning({ insertId: products.id });
               productId = Number(inserted[0].insertId);
               await tx.execute(
                 sql`INSERT INTO apna_products(product_id,vendor_id,sku) VALUES(${productId},${vendorId},${i.sku})`
@@ -299,7 +333,7 @@ export function registerApnaSandbox(app: Express) {
             }
           }
           await tx.execute(
-            sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${b.merchantId},${vendorId},${b.version},${b.live},${new Date(b.eligibility.expiresAt)},now()) ON DUPLICATE KEY UPDATE version=VALUES(version),live=VALUES(live),expires_at=VALUES(expires_at),verified_at=now()`
+            sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${b.merchantId},${vendorId},${b.version},${b.live},${new Date(b.eligibility.expiresAt)},now()) ON CONFLICT (merchant_id) DO UPDATE SET version=EXCLUDED.version,live=EXCLUDED.live,expires_at=EXCLUDED.expires_at,verified_at=now()`
           );
         });
         refreshAt = 0;
@@ -438,7 +472,7 @@ export async function reserveForCheckout(
   const body = { merchantId: l.merchant_id, reference, items };
   const candidate = randomUUID();
   await db.execute(
-    sql`INSERT IGNORE INTO apna_checkouts(reference,merchant_id,vendor_id,request_key,body) VALUES(${reference},${l.merchant_id},${input.shopId},${candidate},${JSON.stringify(body)})`
+    sql`INSERT INTO apna_checkouts(reference,merchant_id,vendor_id,request_key,body) VALUES(${reference},${l.merchant_id},${input.shopId},${candidate},${JSON.stringify(body)}) ON CONFLICT DO NOTHING`
   );
   const row = (
     await rows(
@@ -541,7 +575,7 @@ export async function relayApnaOutbox() {
           .where(eq(paymentRecords.orderId, o.id));
         if (p?.collectedAmountPaise !== o.totalPaise) {
           await tx.execute(
-            sql`UPDATE apna_outbox SET last_error='Cash collection needs reconciliation',next_at=DATE_ADD(now(),INTERVAL 10 SECOND) WHERE id=${r.id}`
+            sql`UPDATE apna_outbox SET last_error='Cash collection needs reconciliation',next_at=(now() + INTERVAL '10 SECOND') WHERE id=${r.id}`
           );
           return;
         }
@@ -574,7 +608,7 @@ export async function relayApnaOutbox() {
       }
       const key = r.request_key || randomUUID();
       await tx.execute(
-        sql`UPDATE apna_outbox SET request_key=${key},body=${JSON.stringify(body)},lease_until=DATE_ADD(now(),INTERVAL 90 SECOND) WHERE id=${r.id}`
+        sql`UPDATE apna_outbox SET request_key=${key},body=${JSON.stringify(body)},lease_until=(now() + INTERVAL '90 SECOND') WHERE id=${r.id}`
       );
       return { ...r, key, body, operation };
     });
@@ -603,7 +637,7 @@ export async function relayApnaOutbox() {
       });
     } catch {
       await db.execute(
-        sql`UPDATE apna_outbox SET attempts=attempts+1,last_error='Apna confirmation pending; retry is safe',next_at=DATE_ADD(now(),INTERVAL 10 SECOND),lease_until=NULL WHERE id=${row.id}`
+        sql`UPDATE apna_outbox SET attempts=attempts+1,last_error='Apna confirmation pending; retry is safe',next_at=(now() + INTERVAL '10 SECOND'),lease_until=NULL WHERE id=${row.id}`
       );
     }
   }

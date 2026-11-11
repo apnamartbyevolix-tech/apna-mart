@@ -554,10 +554,11 @@ export function MarketShell({ children }: { children: ReactNode }) {
             <Link href="/offers">Offers</Link>
             <Link href="/orders">Your orders</Link>
             <Link href="/account">Account & privacy</Link>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/account-deletion">Account deletion</Link>
           </div>
         </div>
         <p className="footer-note">
-          Demo seed merchants are fictional, not participating real stores.
           Customer handover codes are shown privately in signed-in orders.
         </p>
       </footer>

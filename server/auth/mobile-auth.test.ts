@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { getDb } from "../db";
 import {
   beginCustomerLogin,
@@ -38,7 +39,7 @@ const cookie = (r: any) =>
     .join("; ");
 const rows = async (q: any): Promise<any[]> => {
   const r = await db.execute(q);
-  return r[0] as any[];
+  return r.rows as any[];
 };
 function phone() {
   const p = "+919" + String(randomInt(100000000, 1000000000));
@@ -61,7 +62,7 @@ const coolDown = async (p: string) => {
     .update("limit:false:phone:" + p)
     .digest("hex");
   await db.execute(
-    sql`UPDATE customer_auth_limits SET last_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 31 SECOND) WHERE bucket=${h}`
+    sql`UPDATE customer_auth_limits SET last_at=((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '31 SECOND') WHERE bucket=${h}`
   );
 };
 describe("isolated customer mobile authentication", () => {
@@ -81,7 +82,7 @@ describe("isolated customer mobile authentication", () => {
     vi.stubEnv("MTM_AUTH_ORIGINS", "http://localhost:5206");
     vi.stubEnv(
       "MTM_SMS_TEST_OUTBOX",
-      "D:/Codex Output/unused-unit-test-outbox.json"
+      resolve(process.env.TEMP || process.env.TMPDIR || ".", "unused-unit-test-outbox.json")
     );
     db = (await getDb())!;
   });
@@ -98,7 +99,7 @@ describe("isolated customer mobile authentication", () => {
           sql`DELETE FROM customer_phone_identities WHERE user_id=${i.user_id}`
         );
         await db.execute(
-          sql`DELETE FROM users WHERE id=${i.user_id} AND loginMethod='phone-otp'`
+          sql`DELETE FROM users WHERE id=${i.user_id} AND "loginMethod"='phone-otp'`
         );
       }
       await db.execute(
@@ -160,7 +161,7 @@ describe("isolated customer mobile authentication", () => {
   it("rejects expired codes and provider-failed challenges", async () => {
     const s = await start();
     await db.execute(
-      sql`UPDATE customer_otp_challenges SET expires_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 SECOND) WHERE id=${s.result.challengeId}`
+      sql`UPDATE customer_otp_challenges SET expires_at=((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 SECOND') WHERE id=${s.result.challengeId}`
     );
     await expect(
       finishCustomerLogin(req(cookie(s.res)), response(), {

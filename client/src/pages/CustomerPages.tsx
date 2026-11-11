@@ -733,7 +733,7 @@ export function AccountPage() {
           </span>
           <p className="eyebrow">ACCOUNT & PRIVACY</p>
           <h1>Your account, your neighbourhood.</h1>
-          <p>Sign in with secure Manus OAuth to use account features.</p>
+          <p>Sign in with your mobile number to manage your account.</p>
           <LoginButton>Sign in securely</LoginButton>
         </div>
         <div className="account-links">
@@ -742,8 +742,8 @@ export function AccountPage() {
           </Link>
         </div>
         <OtpNote />
-        <IntegrationNote title="Privacy workflows">
-          Privacy policy and account deletion workflows are not implemented.
+        <IntegrationNote title="Privacy">
+          Read our privacy information or request account deletion from the links below.
         </IntegrationNote>
       </div>
     );
@@ -1014,9 +1014,8 @@ export function AccountPage() {
           </form>
         )}
       </section>
-      <IntegrationNote title="Local preview">
-        Push notifications and account deletion are not available in this
-        preview.
+      <IntegrationNote title="Privacy & account">
+        <Link href="/privacy">Privacy information</Link> · <Link href="/account-deletion">Request account deletion</Link>
       </IntegrationNote>
       <Button variant="outline" onClick={() => auth.logout()}>
         Sign out

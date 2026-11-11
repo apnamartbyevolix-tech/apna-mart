@@ -1,5 +1,4 @@
-# Deployment candidate. Apply only after the MySQL, SMS and production connector
-# checks in docs/APNA_MART_DEPLOYMENT.md are complete. Keep this on the free plan.
+# PostgreSQL/Neon deployment. Keep this on the free plan.
 services:
   - type: web
     name: apna-mart
@@ -8,7 +7,7 @@ services:
     branch: main
     region: singapore
     plan: free
-    autoDeployTrigger: off
+    autoDeployTrigger: checksPass
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
     # Free services do not support pre-deploy commands. A migration failure
     # stops startup, so the new API/UI is not served against an older schema.
@@ -23,6 +22,8 @@ services:
         value: 0.0.0.0
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
       - key: MANUS_JWT_SECRET
         sync: false
       - key: MTM_CUSTOMER_AUTH_ENABLED
@@ -35,9 +36,27 @@ services:
         value: apitxt
       - key: APITXT_AUTH_KEY
         sync: false
-      # The localhost-only connector cannot be enabled on a hosted service.
+      # Sandbox execution stays disabled; production requires HTTPS and pinned identities.
       - key: MTM_APNA_SANDBOX_ENABLED
         value: "0"
+      - key: MTM_APNA_CONNECTOR_MODE
+        value: production
+      - key: APNA_SANDBOX_URL
+        value: https://api.apnagalla.in/
+      - key: APNA_SANDBOX_KEY
+        sync: false
+      - key: APNA_SANDBOX_SECRET
+        sync: false
+      - key: MYTOWN_LINK_AUTH
+        value: ed25519-v1
+      - key: MYTOWN_LINK_SELF
+        value: mytown
+      - key: MYTOWN_LINK_KEY_ID
+        sync: false
+      - key: MYTOWN_LINK_PRIVATE_KEY_B64
+        sync: false
+      - key: MYTOWN_LINK_PEER_KEYS_JSON
+        sync: false
       - key: MTM_ENABLE_DEV_AUTH
         value: "0"
       - key: ALLOW_STANDALONE_DEV_LOGIN

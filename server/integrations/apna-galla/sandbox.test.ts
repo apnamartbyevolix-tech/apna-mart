@@ -7,7 +7,7 @@ describe("Local Apna connector cannot become a production connector through a to
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv(
       "DATABASE_URL",
-      "mysql://sandbox:private@127.0.0.1:3313/mtm_e2e_market_test"
+      "postgresql://sandbox:private@127.0.0.1:3313/mtm_e2e_market_test"
     );
     vi.stubEnv("APNA_SANDBOX_URL", "https://localhost:8465/");
     vi.stubEnv("APNA_SANDBOX_KEY", "a".repeat(64));
@@ -28,13 +28,13 @@ describe("Local Apna connector cannot become a production connector through a to
     expect(() => assertSandbox()).toThrow();
   });
   it("rejects a production database even on localhost", () => {
-    vi.stubEnv("DATABASE_URL", "mysql://sandbox:private@localhost/production");
+    vi.stubEnv("DATABASE_URL", "postgresql://sandbox:private@localhost/production");
     expect(() => assertSandbox()).toThrow();
   });
   it("rejects remote data sources", () => {
     vi.stubEnv(
       "DATABASE_URL",
-      "mysql://sandbox:private@other.invalid/mtm_e2e_market_test"
+      "postgresql://sandbox:private@other.invalid/mtm_e2e_market_test"
     );
     expect(() => assertSandbox()).toThrow();
   });

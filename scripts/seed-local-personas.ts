@@ -13,13 +13,13 @@ async function seed(){
  const db=await getDb();if(!db)throw new Error('Local database unavailable');
  try{
  for(const profile of Object.values(SERVER_TEST_PERSONAS)){
-  await db.insert(users).values({...profile,loginMethod:'standalone-dev-test'}).onDuplicateKeyUpdate({set:{openId:profile.openId}});
+  await db.insert(users).values({...profile,loginMethod:'standalone-dev-test'}).onConflictDoUpdate({ target: [users.openId], set:{openId:profile.openId}}).returning({ insertId: users.id });
  }
  const [vendor]=await db.select().from(users).where(eq(users.openId,SERVER_TEST_PERSONAS.vendor.openId)).limit(1);
  await db.update(vendorProfiles).set({userId:vendor.id}).where(and(eq(vendorProfiles.slug,'demo-sunrise-kirana'),eq(vendorProfiles.isDemo,true),isNull(vendorProfiles.userId)));
  const [rider]=await db.select().from(users).where(eq(users.openId,SERVER_TEST_PERSONAS.rider.openId)).limit(1);
  const [town]=await db.select().from(towns).where(eq(towns.slug,'neemgaon-demo')).limit(1);
- await db.insert(riderProfiles).values({userId:rider.id,townId:town.id,phone:'0000000000',vehicleType:'Fictional demo bicycle',status:'approved',available:true}).onDuplicateKeyUpdate({set:{userId:rider.id}});
+ await db.insert(riderProfiles).values({userId:rider.id,townId:town.id,phone:'0000000000',vehicleType:'Fictional demo bicycle',status:'approved',available:true}).onConflictDoUpdate({ target: [riderProfiles.userId], set:{userId:rider.id}}).returning({ insertId: riderProfiles.id });
  console.log('Four local personas ready; fictional seeded shop assigned to the local merchant. Existing profiles preserved.');
  }finally{await db.$client.end();}
 }

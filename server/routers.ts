@@ -9,8 +9,8 @@ import { answerLocalHelp, localAssistantEnabled } from './marketplace/local-assi
 import { checkoutInput } from "../shared/checkout";
 import { duplicateCheckout, prepareCheckout, requestFingerprint } from "./marketplace/checkout";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { and, asc, desc, eq, inArray, like, lt, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
+import { and, asc, desc, eq, inArray, ilike, lt, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb } from "./db";
@@ -143,7 +143,7 @@ async function writeAudit(
     entityType: type,
     entityId: id,
     details: details ?? null,
-  });
+  }).returning({ insertId: auditRecords.id });
 }
 async function audit(
   actor: number,
@@ -270,7 +270,7 @@ export async function executeFailedDeliveryTransition(
       actorRole,
       inventoryPreserved: true,
     },
-  });
+  }).returning({ insertId: orderEvents.id });
 
   // 5. Write audit entry
   await writeAudit(
@@ -488,7 +488,7 @@ export async function executeReturnRecovery(
       items: itemSummary,
       returnReceivedAt: now.toISOString(),
     },
-  });
+  }).returning({ insertId: orderEvents.id });
 
   await writeAudit(
     tx,
@@ -570,7 +570,7 @@ async function recordCashCollection(
       variancePaise,
       exact,
     },
-  });
+  }).returning({ insertId: orderEvents.id });
   await writeAudit(tx, actorUserId, "cash.collection_recorded", "order", order.id, {
     paymentMethod: order.paymentMethod,
     expectedPaise: order.totalPaise,
@@ -602,7 +602,7 @@ async function recordHandoverFailure(
     fromStatus: order.status,
     toStatus: locked ? "handover_locked" : "handover_attempt_failed",
     metadata: { attempts, locked, lockTime },
-  });
+  }).returning({ insertId: orderEvents.id });
   if (locked)
     await writeAudit(tx, actorUserId, "handover.locked", "order", order.id, { attempts });
   return locked ? "locked" : "invalid";
@@ -625,7 +625,7 @@ async function insertOrderEvent(
       fromStatus: from,
       toStatus: to,
       note: note ?? null,
-    });
+    }).returning({ insertId: orderEvents.id });
 }
 const idInput = z.object({ id: z.number().int().positive() });
 const imageUploadInput = z.object({
@@ -971,14 +971,14 @@ export const appRouter = router({
             role,
             lastSignedIn: new Date(),
           })
-          .onDuplicateKeyUpdate({
+          .onConflictDoUpdate({ target: [users.openId],
             set: {
               name: profile.name,
               email: profile.email,
               role,
               lastSignedIn: new Date(),
             },
-          });
+          }).returning({ insertId: users.id });
 
         const sessionToken = await sdk.createSessionToken(profile.openId, {
           name: profile.name,
@@ -1090,7 +1090,7 @@ export const appRouter = router({
         await db
           .insert(customerProfiles)
           .values({ userId: ctx.user.id, ...input })
-          .onDuplicateKeyUpdate({ set: input });
+          .onConflictDoUpdate({ target: [customerProfiles.userId],  set: input });
         return { success: true };
       }),
     addresses: protectedProcedure.query(async ({ ctx }) => {
@@ -1175,7 +1175,7 @@ export const appRouter = router({
               .where(and(eq(customerAddresses.id, input.id), eq(customerAddresses.userId, ctx.user.id)));
             return { id: input.id };
           }
-          const result = await tx.insert(customerAddresses).values(values);
+          const result = await tx.insert(customerAddresses).values(values).returning({ insertId: customerAddresses.id });
           return { id: Number(result[0].insertId) };
         });
       }),
@@ -1214,7 +1214,7 @@ export const appRouter = router({
             vendorId: order.vendorId,
             rating: input.rating,
             comment: input.comment?.trim() || null,
-          });
+          }).returning({ insertId: shopReviews.id });
           return { reviewId: Number(inserted.insertId) };
         });
       }),
@@ -1279,14 +1279,14 @@ export const appRouter = router({
             customerId: ctx.user.id,
             orderId: input.orderId ?? null,
             subject: input.subject,
-          });
+          }).returning({ insertId: supportTickets.id });
           const ticketId = Number(inserted.insertId);
           await tx.insert(supportMessages).values({
             ticketId,
             senderUserId: ctx.user.id,
             senderRole: "customer",
             message: input.message,
-          });
+          }).returning({ insertId: supportMessages.id });
           await writeAudit(tx, ctx.user.id, "support.ticket_created", "support_ticket", ticketId, { ticketNumber });
           return { ticketId, ticketNumber };
         });
@@ -1307,7 +1307,7 @@ export const appRouter = router({
             senderUserId: ctx.user.id,
             senderRole: "customer",
             message: input.message,
-          });
+          }).returning({ insertId: supportMessages.id });
           await tx.update(supportTickets).set({ updatedAt: new Date() }).where(eq(supportTickets.id, ticket.id));
           return { messageId: Number(inserted.insertId) };
         });
@@ -1338,7 +1338,7 @@ export const appRouter = router({
         if (!shop) throw new TRPCError({ code: "NOT_FOUND", message: "Shop is not active in your selected service area" });
         if (input.favorited) {
           await db.insert(favoriteShops).values({ userId: ctx.user.id, vendorId: shop.id })
-            .onDuplicateKeyUpdate({ set: { vendorId: shop.id } });
+            .onConflictDoUpdate({ target: [favoriteShops.userId, favoriteShops.vendorId],  set: { vendorId: shop.id } }).returning({ insertId: favoriteShops.id });
         } else {
           await db.delete(favoriteShops).where(and(eq(favoriteShops.userId, ctx.user.id), eq(favoriteShops.vendorId, shop.id)));
         }
@@ -1503,8 +1503,8 @@ export const appRouter = router({
         if (input.q)
           shopConditions.push(
             or(
-              like(vendorProfiles.shopName, `%${input.q}%`),
-              like(categories.name, `%${input.q}%`)
+              ilike(vendorProfiles.shopName, `%${input.q}%`),
+              ilike(categories.name, `%${input.q}%`)
             )!
           );
         const shops = await db
@@ -1552,8 +1552,8 @@ export const appRouter = router({
         if (input.q)
           productConds.push(
             or(
-              like(products.name, `%${input.q}%`),
-              like(products.description, `%${input.q}%`)
+              ilike(products.name, `%${input.q}%`),
+              ilike(products.description, `%${input.q}%`)
             )!
           );
         const foundProducts = await db
@@ -1766,7 +1766,7 @@ export const appRouter = router({
                 addressSnapshot,
                 customerNameSnapshot: custName,
                 customerPhoneSnapshot: custPhone,
-              });
+              }).returning({ insertId: orders.id });
             const orderId = Number(result[0].insertId);
             await tx
               .insert(orderItems)
@@ -1780,7 +1780,7 @@ export const appRouter = router({
                   unitPricePaise: i.product.pricePaise,
                   lineTotalPaise: i.product.pricePaise * i.quantity,
                 }))
-              );
+              ).returning({ insertId: orderItems.id });
             await tx
               .insert(orderEvents)
               .values({
@@ -1791,7 +1791,7 @@ export const appRouter = router({
                 toStatus: "placed",
                 note: null,
                 metadata: { checkoutRequestV1: requestFingerprint(input, ctx.user.id), quoteFingerprint: quote.quoteFingerprint },
-              });
+              }).returning({ insertId: orderEvents.id });
             await tx
               .insert(paymentRecords)
               .values({
@@ -1799,7 +1799,7 @@ export const appRouter = router({
                 method: input.paymentMethod,
                 status: "pending",
                 amountPaise: totals.totalPaise,
-              });
+              }).returning({ insertId: paymentRecords.id });
             await tx
               .insert(financialLedger)
               .values(
@@ -1811,7 +1811,7 @@ export const appRouter = router({
                   deliveryFeePaise: totals.deliveryFeePaise,
                   platformFeePaise: totals.platformFeePaise,
                 })
-              );
+              ).returning({ insertId: financialLedger.id });
             await attachCheckout(tx, apnaHold, orderId, orderNumber);
             return { orderId, orderNumber, duplicate: false, totals };
           });
@@ -1821,10 +1821,10 @@ export const appRouter = router({
           for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
             const current = cause as { code?: unknown; cause?: unknown };
             mysqlCode ??= current.code;
-            if (current.code === "ER_DUP_ENTRY") break;
+            if (current.code === "23505") break;
             cause = current.cause;
           }
-          if (mysqlCode === "ER_DUP_ENTRY" || (cause as { code?: unknown } | null)?.code === "ER_DUP_ENTRY") {
+          if (mysqlCode === "23505" || (cause as { code?: unknown } | null)?.code === "23505") {
             const [same] = await db
               .select()
               .from(orders)
@@ -1956,7 +1956,7 @@ export const appRouter = router({
               fromStatus: o.status,
               toStatus: "cancelled",
               note: input.reason ?? null,
-            });
+            }).returning({ insertId: orderEvents.id });
           return { success: true };
         });
       }),
@@ -2091,7 +2091,7 @@ export const appRouter = router({
             phone: input.phone ?? null,
             status: "pending",
             isOpen: false,
-          });
+          }).returning({ insertId: vendorProfiles.id });
           const id = Number(result[0].insertId);
           await writeAudit(tx, ctx.user.id, "vendor.register", "vendor", id);
           return { id, status: "pending" as const };
@@ -2177,7 +2177,7 @@ export const appRouter = router({
             mrpPaise: input.mrpPaise ?? null,
             imageUrl: null,
             availability: input.availability ?? "available",
-          });
+          }).returning({ insertId: products.id });
         return { id: Number(res[0].insertId) };
       }),
     uploadProductImage: apnaVendorProcedure
@@ -2436,7 +2436,7 @@ export const appRouter = router({
             fromStatus: o.status,
             toStatus: input.status,
             note: input.reason ?? null,
-          });
+          }).returning({ insertId: orderEvents.id });
           const cash = input.status === "delivered"
             ? await recordCashCollection(tx, o, ctx.user.id, "vendor", input.cashAmountPaise!, input.cashNote)
             : null;
@@ -2524,7 +2524,7 @@ export const appRouter = router({
             userId: ctx.user.id,
             status: "pending",
             available: false,
-          });
+          }).returning({ insertId: riderProfiles.id });
         return { id: Number(res[0].insertId), status: "pending" as const };
       }),
     deliveries: protectedProcedure.query(async ({ ctx }) => {
@@ -2724,7 +2724,7 @@ export const appRouter = router({
               fromStatus: o.status,
               toStatus: next,
               note: input.action === "delivered" ? "Customer handover code verified" : input.proof ?? null,
-            });
+            }).returning({ insertId: orderEvents.id });
             if (input.action === "delivered")
               cash = await recordCashCollection(tx, o, ctx.user.id, "rider", input.cashAmountPaise!, input.cashNote);
           }
@@ -2919,7 +2919,7 @@ export const appRouter = router({
             senderUserId: ctx.user.id,
             senderRole: "admin",
             message: input.message,
-          });
+          }).returning({ insertId: supportMessages.id });
           const status = input.status ?? "in_progress";
           await tx.update(supportTickets).set({ status, updatedAt: new Date() }).where(eq(supportTickets.id, ticket.id));
           await writeAudit(tx, ctx.user.id, "support.ticket_replied", "support_ticket", ticket.id, { status });
@@ -2943,7 +2943,7 @@ export const appRouter = router({
             fromStatus: order.status,
             toStatus: "handover_attempts_reset",
             note: input.reason,
-          });
+          }).returning({ insertId: orderEvents.id });
           await writeAudit(tx, ctx.user.id, "handover.attempts_reset", "order", order.id, { reason: input.reason });
           return { success: true };
         });
@@ -3041,7 +3041,7 @@ export const appRouter = router({
             toStatus: exact ? "cash_reconciled" : "cash_variance_reviewed",
             note: input.reason,
             metadata: { expectedPaise: order.totalPaise, verifiedPaise: input.verifiedAmountPaise, variancePaise, exact },
-          });
+          }).returning({ insertId: orderEvents.id });
           await writeAudit(tx, ctx.user.id, "cash.collection_reconciled", "order", order.id, {
             expectedPaise: order.totalPaise,
             verifiedPaise: input.verifiedAmountPaise,
@@ -3147,7 +3147,7 @@ export const appRouter = router({
               fromStatus: o.status,
               toStatus: input.status,
               note: input.reason,
-            });
+            }).returning({ insertId: orderEvents.id });
           await writeAudit(tx, ctx.user.id, "order.admin_status", "order", o.id, {
             status: input.status,
             reason: input.reason,
@@ -3225,7 +3225,7 @@ export const appRouter = router({
             throw new TRPCError({ code: "CONFLICT", message: "This rider already has an active delivery assignment" });
           await tx
             .insert(deliveryAssignments)
-            .values({ orderId: o.id, riderId: r.id, assignedBy: ctx.user.id });
+            .values({ orderId: o.id, riderId: r.id, assignedBy: ctx.user.id }).returning({ insertId: deliveryAssignments.id });
           await writeAudit(tx, ctx.user.id, "rider.assign", "order", o.id, {
             riderId: r.id,
           });
@@ -3268,7 +3268,7 @@ export const appRouter = router({
             ...input,
             icon: input.icon ?? null,
             description: input.description ?? null,
-          });
+          }).returning({ insertId: categories.id });
         const id = Number(res[0].insertId);
         await audit(ctx.user.id, "category.create", "category", id);
         return { id };
@@ -3288,7 +3288,7 @@ export const appRouter = router({
           countryCode: "IN",
           active: true,
           isDemo: false,
-        });
+        }).returning({ insertId: towns.id });
         const id = Number(result[0].insertId);
         await audit(ctx.user.id, "town.create", "town", id);
         return { id };
@@ -3340,7 +3340,7 @@ export const appRouter = router({
           slug,
           postalCode: input.postalCode ?? null,
           active: true,
-        });
+        }).returning({ insertId: serviceZones.id });
         const id = Number(result[0].insertId);
         await audit(ctx.user.id, "zone.create", "service_zone", id, {
           townId: input.townId,
@@ -3440,7 +3440,7 @@ export const appRouter = router({
             value: input.value,
             updatedBy: ctx.user.id,
           })
-          .onDuplicateKeyUpdate({
+          .onConflictDoUpdate({ target: [platformSettings.key],
             set: { value: input.value, updatedBy: ctx.user.id },
           });
         await audit(ctx.user.id, "settings.update", "setting", null, {

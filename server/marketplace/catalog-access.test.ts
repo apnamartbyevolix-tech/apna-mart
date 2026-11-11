@@ -9,7 +9,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("PUBLIC_PREVIEW", "");
-  vi.stubEnv("DATABASE_URL", "mysql://unit:unit@127.0.0.1/mtm_e2e_catalog");
+  vi.stubEnv("DATABASE_URL", "postgresql://unit:unit@127.0.0.1/mtm_e2e_catalog_test");
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -49,7 +49,7 @@ describe("catalogue release boundary without verified ERP eligibility", () => {
     expect(getDb).not.toHaveBeenCalled();
   });
   it("rejects non-isolated development databases before access", async () => {
-    vi.stubEnv("DATABASE_URL", "mysql://unit:unit@127.0.0.1/shared_shop");
+    vi.stubEnv("DATABASE_URL", "postgresql://unit:unit@127.0.0.1/shared_shop");
     await expect(request("home")).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(getDb).not.toHaveBeenCalled();
   });

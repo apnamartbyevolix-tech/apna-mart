@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { databaseConnectionConfig } from "./marketplace/database-config";
@@ -12,9 +13,7 @@ export async function getDb() {
     // Validate before pool creation; an isolation failure must not fall back to a raw URL.
     const connection = databaseConnectionConfig(process.env.DATABASE_URL);
     try {
-      _db = typeof connection === "string"
-        ? drizzle(connection)
-        : drizzle({ connection });
+      _db = drizzle(new Pool(connection));
     } catch (error) {
       console.warn("[Database] Failed to initialize the connection pool");
       _db = null;
@@ -75,9 +74,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({ target: [users.openId],
       set: updateSet,
-    });
+    }).returning({ insertId: users.id });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;

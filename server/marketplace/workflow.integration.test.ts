@@ -74,7 +74,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         email: `${label}-${suffix}@example.invalid`,
         loginMethod: "isolated-test-only",
         role,
-      });
+      }).returning({ insertId: users.id });
       const [row] = await db.select().from(users).where(eq(users.id, Number(inserted.insertId))).limit(1);
       if (!row) throw new Error("Could not load an isolated test identity");
       return row;
@@ -104,7 +104,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         availability: "available",
         imageUrl: null,
         isDemo: false,
-      });
+      }).returning({ insertId: products.id });
       return { id: Number(inserted.insertId), stock: 50, price: 1299 };
     }
 
@@ -132,14 +132,14 @@ const workflow = describe.skipIf(!integrationEnabled)(
 
     async function catalogFixture() {
       const suffix = randomUUID();
-      const [zone] = await db.insert(serviceZones).values({ townId, slug: `catalog-${suffix}`, name: "Isolated catalog", locality: "Isolated catalog", active: true });
+      const [zone] = await db.insert(serviceZones).values({ townId, slug: `catalog-${suffix}`, name: "Isolated catalog", locality: "Isolated catalog", active: true }).returning({ insertId: serviceZones.id });
       const categoryIds: number[] = [];
       for (const kind of ["shop", "product"]) {
-        const [category] = await db.insert(categories).values({ slug: `${kind}-${suffix}`, name: `Isolated ${kind}`, enabled: true, regulated: false });
+        const [category] = await db.insert(categories).values({ slug: `${kind}-${suffix}`, name: `Isolated ${kind}`, enabled: true, regulated: false }).returning({ insertId: categories.id });
         categoryIds.push(Number(category.insertId));
       }
-      const [shop] = await db.insert(vendorProfiles).values({ townId, zoneId: Number(zone.insertId), categoryId: categoryIds[0], slug: `catalog-${suffix}`, shopName: "Isolated catalog shop", address: "Fictional test address", status: "approved", isOpen: true, isDemo: true, pickupEnabled: true });
-      const [product] = await db.insert(products).values({ vendorId: Number(shop.insertId), categoryId: categoryIds[1], slug: `product-${suffix}`, name: "Isolated cross-category product", unit: "piece", pricePaise: 1299, stockQuantity: 4, availability: "available", isDemo: true });
+      const [shop] = await db.insert(vendorProfiles).values({ townId, zoneId: Number(zone.insertId), categoryId: categoryIds[0], slug: `catalog-${suffix}`, shopName: "Isolated catalog shop", address: "Fictional test address", status: "approved", isOpen: true, isDemo: true, pickupEnabled: true }).returning({ insertId: vendorProfiles.id });
+      const [product] = await db.insert(products).values({ vendorId: Number(shop.insertId), categoryId: categoryIds[1], slug: `product-${suffix}`, name: "Isolated cross-category product", unit: "piece", pricePaise: 1299, stockQuantity: 4, availability: "available", isDemo: true }).returning({ insertId: products.id });
       return { scope: { townId, zoneId: Number(zone.insertId) }, shopId: Number(shop.insertId), productId: Number(product.insertId), shopCategory: categoryIds[0], productCategory: categoryIds[1] };
     }
 
@@ -186,7 +186,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         locality: "Different Test Locality",
         postalCode: "00000",
         active: true,
-      });
+      }).returning({ insertId: serviceZones.id });
       otherZoneId = Number(otherZone.insertId);
       categoryId = category.id;
       vendorUser = await createUser("vendor");
@@ -211,7 +211,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         platformFeePaise: 50,
         minimumOrderPaise: 0,
         commissionBps: 500,
-      });
+      }).returning({ insertId: vendorProfiles.id });
       shopId = Number(shopResult.insertId);
       const [riderResult] = await db.insert(riderProfiles).values({
         userId: rider.id,
@@ -220,7 +220,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         vehicleType: "bicycle",
         status: "approved",
         available: true,
-      });
+      }).returning({ insertId: riderProfiles.id });
       riderId = Number(riderResult.insertId);
       const [addressResult] = await db.insert(customerAddresses).values({
         userId: customer.id,
@@ -234,7 +234,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
         landmark: null,
         postalCode: zone.postalCode,
         isDefault: true,
-      });
+      }).returning({ insertId: customerAddresses.id });
       customerAddressId = Number(addressResult.insertId);
       productsByKey = {
         duplicate: await addProduct("duplicate"),
@@ -376,7 +376,7 @@ const workflow = describe.skipIf(!integrationEnabled)(
     it("requires reconfirmation after editing a saved delivery address and keeps addresses owner-scoped", async () => {
       const product = await addProduct("edited-address-quote");
       const owner = caller(await createUser("quote-address-owner"));
-      const [address] = await db.insert(customerAddresses).values({ userId: (await owner.auth.me())!.id, townId, zoneId, label: "Quote address", recipientName: "Isolated customer", phone: "9999900000", line1: "Original fictional address" });
+      const [address] = await db.insert(customerAddresses).values({ userId: (await owner.auth.me())!.id, townId, zoneId, label: "Quote address", recipientName: "Isolated customer", phone: "9999900000", line1: "Original fictional address" }).returning({ insertId: customerAddresses.id });
       const input = { idempotencyKey: `address_${randomUUID()}`, shopId, townId, zoneId, addressId: Number(address.insertId), items: [{ productId: product.id, quantity: 1 }], fulfillmentType: "delivery" as const, paymentMethod: "cod" as const };
       const quote = await owner.marketplace.quoteOrder(input);
       expect(quote).toHaveProperty("address.line1", "Original fictional address");

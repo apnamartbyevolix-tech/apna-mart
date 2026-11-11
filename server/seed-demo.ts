@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./db";
+import { parseLocalDatabaseConfig } from "./marketplace/database-config";
 import {
   categories,
   products,
@@ -10,6 +11,8 @@ import {
 
 /** Explicit demo-only command. Uses stable keys and no-op duplicate updates so operator edits are never overwritten. */
 async function seedDemo() {
+  if(process.env.NODE_ENV==="production")throw new Error("Demo seeding is forbidden in production.");
+  parseLocalDatabaseConfig(process.env.DATABASE_URL,"development");
   const db = await getDb();
   if (!db)
     throw new Error(
@@ -26,7 +29,7 @@ async function seedDemo() {
       active: true,
       isDemo: true,
     })
-    .onDuplicateKeyUpdate({ set: { slug: sql`${towns.slug}` } });
+    .onConflictDoUpdate({ target: [towns.slug],  set: { slug: sql`${towns.slug}` } }).returning({ insertId: towns.id });
   const [town] = await db
     .select()
     .from(towns)
@@ -44,7 +47,7 @@ async function seedDemo() {
       postalCode: "000000",
       active: true,
     })
-    .onDuplicateKeyUpdate({ set: { slug: sql`${serviceZones.slug}` } });
+    .onConflictDoUpdate({ target: [serviceZones.townId, serviceZones.slug],  set: { slug: sql`${serviceZones.slug}` } }).returning({ insertId: serviceZones.id });
   const [zone] = await db
     .select()
     .from(serviceZones)
@@ -84,7 +87,7 @@ async function seedDemo() {
         regulated: slug === "regulated-medicines",
         sortOrder,
       })
-      .onDuplicateKeyUpdate({ set: { slug: sql`${categories.slug}` } });
+      .onConflictDoUpdate({ target: [categories.slug],  set: { slug: sql`${categories.slug}` } }).returning({ insertId: categories.id });
   const cats = await db.select().from(categories);
   const catId = (slug: string) => {
     const row = cats.find(c => c.slug === slug);
@@ -177,7 +180,7 @@ async function seedDemo() {
         commissionBps: 0,
         preparationMinutes: 25,
       })
-      .onDuplicateKeyUpdate({ set: { slug: sql`${vendorProfiles.slug}` } });
+      .onConflictDoUpdate({ target: [vendorProfiles.slug],  set: { slug: sql`${vendorProfiles.slug}` } }).returning({ insertId: vendorProfiles.id });
     const [vendor] = await db
       .select()
       .from(vendorProfiles)
@@ -204,7 +207,7 @@ async function seedDemo() {
           availability: "available",
           isDemo: true,
         })
-        .onDuplicateKeyUpdate({ set: { slug: sql`${products.slug}` } });
+        .onConflictDoUpdate({ target: [products.vendorId, products.slug],  set: { slug: sql`${products.slug}` } }).returning({ insertId: products.id });
     }
   }
   console.log(

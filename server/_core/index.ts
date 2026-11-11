@@ -10,6 +10,8 @@ import { publicPlatformScript } from "./publicConfig";
 import { appRouter, verifyIsolatedDevDatabaseUrl } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { getDb } from "../db";
+import { sql } from "drizzle-orm";
 
 export function resolveServerListenConfig(
   env: NodeJS.ProcessEnv = process.env
@@ -74,6 +76,9 @@ function parsePort(rawPort: string): number {
 
 async function startServer() {
   const app = express();
+  app.disable("x-powered-by");
+  // Render's edge is the single trusted hop. DNS-only custom domains reach it directly.
+  if(process.env.RENDER==="true") app.set("trust proxy",1);
   const server = createServer(app);
   registerMobileAuth(app);
   registerApnaVendor(app);
@@ -81,7 +86,11 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/health", async (_req, res) => {
+    res.set("Cache-Control","no-store");
+    try { const db=await getDb(); if(!db)throw Error("Database unavailable"); await db.execute(sql`SELECT 1`); res.json({status:"ok"}); }
+    catch {res.status(503).json({status:"unavailable"});}
+  });
   app.get("/api/platform/config.js", (_req, res) => {
     res
       .set("Cache-Control", "no-store")

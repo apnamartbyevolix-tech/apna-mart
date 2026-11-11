@@ -1,0 +1,37 @@
+name: Verify PostgreSQL application
+on: [push, pull_request]
+jobs:
+  verify:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: isolated_ci
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: mtm_e2e_ci_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U isolated_ci -d mtm_e2e_ci_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://isolated_ci:isolated_ci_only@127.0.0.1:5432/mtm_e2e_ci_test
+      MTM_RUN_ISOLATED_DB_TESTS: "1"
+      MANUS_JWT_SECRET: isolated-ci-fixture-secret-never-used-for-production
+      MYTOWN_ADMIN_EMAIL: isolated-platform-owner@example.invalid
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile --prod=false
+      - run: pnpm check
+      - run: pnpm db:migrate
+      - run: pnpm exec tsx server/seed-demo.ts
+      - run: pnpm test
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/postgres-safeguards.sql
+      - run: pnpm build

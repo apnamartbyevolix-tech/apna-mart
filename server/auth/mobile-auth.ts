@@ -37,7 +37,7 @@ const mac = (s: string) =>
   createHmac("sha256", process.env.MTM_OTP_SECRET!).update(s).digest("hex");
 const rows = async (db: any, q: any): Promise<any[]> => {
   const r = await db.execute(q);
-  return r[0] as any[];
+  return r.rows as any[];
 };
 const dbRequired = async () => {
   const db = await getDb();
@@ -148,11 +148,11 @@ async function takeLimits(tx: any, phone: string, ip: string, verify = false) {
     .sort((a, b) => a.key.localeCompare(b.key));
   for (const e of entries) {
     await tx.execute(
-      sql`INSERT IGNORE INTO customer_auth_limits(bucket,hits,resets_at,last_at) VALUES(${e.key},0,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR),'2000-01-01')`
+      sql`INSERT INTO customer_auth_limits(bucket,hits,resets_at,last_at) VALUES(${e.key},0,((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 HOUR'),'2000-01-01') ON CONFLICT DO NOTHING`
     );
     const [r] = await rows(
       tx,
-      sql`SELECT *,resets_at<=UTC_TIMESTAMP() AS expired,TIMESTAMPDIFF(SECOND,last_at,UTC_TIMESTAMP()) AS age FROM customer_auth_limits WHERE bucket=${e.key} FOR UPDATE`
+      sql`SELECT *,resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS expired,EXTRACT(EPOCH FROM ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')-last_at)) AS age FROM customer_auth_limits WHERE bucket=${e.key} FOR UPDATE`
     );
     if (
       !r.expired &&
@@ -162,7 +162,7 @@ async function takeLimits(tx: any, phone: string, ip: string, verify = false) {
   }
   for (const e of entries)
     await tx.execute(
-      sql`UPDATE customer_auth_limits SET hits=IF(resets_at<=UTC_TIMESTAMP(),1,hits+1),resets_at=IF(resets_at<=UTC_TIMESTAMP(),DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR),resets_at),last_at=UTC_TIMESTAMP() WHERE bucket=${e.key}`
+      sql`UPDATE customer_auth_limits SET hits=CASE WHEN resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') THEN 1 ELSE hits+1 END,resets_at=CASE WHEN resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') THEN ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 HOUR') ELSE resets_at END,last_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE bucket=${e.key}`
     );
   return true;
 }
@@ -250,7 +250,7 @@ export async function beginCustomerLogin(
       sql`UPDATE customer_otp_challenges SET state='REVOKED' WHERE phone=${phone} AND state IN('PENDING','READY')`
     );
     await tx.execute(
-      sql`INSERT INTO customer_otp_challenges(id,phone,digest,browser_hash,state,expires_at) VALUES(${id},${phone},${mac(id + ":" + phone + ":" + otp)},${digest(binding)},'PENDING',DATE_ADD(UTC_TIMESTAMP(),INTERVAL 5 MINUTE))`
+      sql`INSERT INTO customer_otp_challenges(id,phone,digest,browser_hash,state,expires_at) VALUES(${id},${phone},${mac(id + ":" + phone + ":" + otp)},${digest(binding)},'PENDING',((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '5 MINUTE'))`
     );
     return true;
   });
@@ -323,7 +323,7 @@ export async function finishCustomerLogin(
       return { error: "limited" };
     const [c] = await rows(
       tx,
-      sql`SELECT *,expires_at<=UTC_TIMESTAMP() AS expired FROM customer_otp_challenges WHERE id=${body.challengeId} FOR UPDATE`
+      sql`SELECT *,expires_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS expired FROM customer_otp_challenges WHERE id=${body.challengeId} FOR UPDATE`
     );
     if (c.state !== "READY" || c.expired || c.attempts >= 5)
       return { error: c.attempts >= 5 ? "limited" : "invalid" };
@@ -351,7 +351,7 @@ export async function finishCustomerLogin(
           loginMethod: "phone-otp",
           role: "user",
           lastSignedIn: new Date(),
-        });
+        }).returning({ insertId: users.id });
       identity = { user_id: Number(inserted[0].insertId) };
       await tx.execute(
         sql`INSERT INTO customer_phone_identities(phone,user_id) VALUES(${c.phone},${identity.user_id})`
@@ -366,10 +366,10 @@ export async function finishCustomerLogin(
       sql`UPDATE customer_otp_challenges SET state='CONSUMED' WHERE id=${c.id}`
     );
     await tx.execute(
-      sql`INSERT INTO customer_mobile_sessions(token_hash,user_id,expires_at) VALUES(${digest(token)},${user.id},DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 DAY))`
+      sql`INSERT INTO customer_mobile_sessions(token_hash,user_id,expires_at) VALUES(${digest(token)},${user.id},((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '30 DAY'))`
     );
     await tx.execute(
-      sql`UPDATE users SET lastSignedIn=UTC_TIMESTAMP() WHERE id=${user.id}`
+      sql`UPDATE users SET "lastSignedIn"=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE id=${user.id}`
     );
     const old = await rows(
       tx,
@@ -379,7 +379,7 @@ export async function finishCustomerLogin(
       .filter(s => s.token_hash !== digest(token))
       .slice(4))
       await tx.execute(
-        sql`UPDATE customer_mobile_sessions SET revoked_at=UTC_TIMESTAMP() WHERE token_hash=${session.token_hash}`
+        sql`UPDATE customer_mobile_sessions SET revoked_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE token_hash=${session.token_hash}`
       );
     return { userId: user.id };
   });
@@ -415,7 +415,7 @@ export async function authenticateMobileRequest(req: Request) {
   const db = await dbRequired();
   const [session] = await rows(
     db,
-    sql`SELECT user_id FROM customer_mobile_sessions WHERE token_hash=${digest(token)} AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP() AND last_seen_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 7 DAY)`
+    sql`SELECT user_id FROM customer_mobile_sessions WHERE token_hash=${digest(token)} AND revoked_at IS NULL AND expires_at>(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AND last_seen_at>((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '7 DAY')`
   );
   if (!session) return null;
   const [user] = await rows(
@@ -424,7 +424,7 @@ export async function authenticateMobileRequest(req: Request) {
   );
   if (!user) return null;
   await db.execute(
-    sql`UPDATE customer_mobile_sessions SET last_seen_at=UTC_TIMESTAMP() WHERE token_hash=${digest(token)} AND last_seen_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 5 MINUTE)`
+    sql`UPDATE customer_mobile_sessions SET last_seen_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE token_hash=${digest(token)} AND last_seen_at<((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '5 MINUTE')`
   );
   return user as typeof users.$inferSelect;
 }
@@ -434,7 +434,7 @@ export async function logoutMobileRequest(req: Request, res: Response) {
   assertMobileOrigin(req);
   const db = await dbRequired();
   await db.execute(
-    sql`UPDATE customer_mobile_sessions SET revoked_at=UTC_TIMESTAMP() WHERE token_hash=${digest(token)}`
+    sql`UPDATE customer_mobile_sessions SET revoked_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE token_hash=${digest(token)}`
   );
   res.clearCookie(cookieName(), cookieOptions());
 }

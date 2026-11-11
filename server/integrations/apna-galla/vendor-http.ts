@@ -6,13 +6,13 @@ import { z } from "zod";
 import { getDb } from "../../db";
 import { users, vendorProfiles } from "../../../drizzle/schema";
 import { appRouter } from "../../routers";
-import { assertSandbox, sandboxEnabled } from "./sandbox";
+import { assertSandbox, sandboxEnabled, productionConnector } from "./sandbox";
 import { vendorBridgeContext } from "../../marketplace/vendor-context";
 import { withinShopHours, validShopHours } from "../../../shared/shop-hours";
 
 const requestSchema = z
   .object({
-    revision: z.literal("1.3-sandbox"),
+    revision: z.enum(["1.3-sandbox", "1.3"]),
     merchantId: z.string().uuid(),
     operation: z.enum([
       "overview",
@@ -63,12 +63,13 @@ export function registerApnaVendor(app: Express) {
         try{verifyConnection('apna',req.method,req.originalUrl,raw,req.headers);}catch{res.status(401).json({message:'Invalid server signature'});return;}
         const b = requestSchema.parse(JSON.parse(raw.toString("utf8"))),
           db = await getDb();
+        if(b.revision!==(productionConnector()?"1.3":"1.3-sandbox"))throw Error("Incorrect connector revision");
         if (!db) throw Error("Unavailable");
         const mutating = ["status", "return", "settings"].includes(b.operation);
         const fingerprint = createHash("sha256").update(raw).digest("hex");
         const result = await db.transaction(async tx => {
           // Lock the validated merchant mapping: customer IDs or seller IDs from the browser are never trusted.
-          const [links] = await tx.execute(
+          const {rows:links} = await tx.execute(
               sql`SELECT * FROM apna_links WHERE merchant_id=${b.merchantId} FOR UPDATE`
             ),
             link = (links as unknown as any[])[0];
@@ -76,7 +77,7 @@ export function registerApnaVendor(app: Express) {
             throw Object.assign(Error("Shop connection not found"), {
               httpStatus: 403,
             });
-          const [prior] = await tx.execute(
+          const {rows:prior} = await tx.execute(
               sql`SELECT * FROM apna_vendor_requests WHERE merchant_id=${b.merchantId} AND request_key=${requestKey}`
             ),
             previous = (prior as unknown as any[])[0];
@@ -124,8 +125,8 @@ export function registerApnaVendor(app: Express) {
                     const list = (
                       await caller.vendor.orders(b.input as any)
                     ).slice(0, 100);
-                    const [states] = await tx.execute(
-                      sql`SELECT c.order_id,c.state FROM apna_checkouts c JOIN orders o ON o.id=c.order_id WHERE o.vendorId=${vendor.id}`
+                    const {rows:states} = await tx.execute(
+                      sql`SELECT c.order_id,c.state FROM apna_checkouts c JOIN orders o ON o.id=c.order_id WHERE o."vendorId"=${vendor.id}`
                     );
                     output = list.map(o => ({
                       ...o,

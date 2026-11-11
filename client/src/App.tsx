@@ -8,6 +8,7 @@ import { MarketProvider, MarketShell } from "./components/MarketChrome";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("./pages/CustomerDiscovery"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const OffersPage = lazy(() =>
   import("./pages/CustomerDiscovery").then(m => ({ default: m.OffersPage }))
 );
@@ -101,6 +102,8 @@ function Router() {
             <Route path="/favorites" component={FavoritesPage} />
             <Route path="/support" component={SupportPage} />
             <Route path="/account" component={AccountPage} />
+            <Route path="/privacy">{()=> <PrivacyPage />}</Route>
+            <Route path="/account-deletion">{()=> <PrivacyPage deletion />}</Route>
             <Route path="/login" component={SignInPage} />
             <Route component={NotFound} />
           </Switch>
