@@ -33,5 +33,6 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm exec tsx server/seed-demo.ts
       - run: pnpm test
-      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/postgres-safeguards.sql
+      # Use the disposable service's local socket; its Docker network IP is not localhost.
+      - run: docker exec -i "${{ job.services.postgres.id }}" psql -U isolated_ci -d mtm_e2e_ci_test -v ON_ERROR_STOP=1 < scripts/postgres-safeguards.sql
       - run: pnpm build

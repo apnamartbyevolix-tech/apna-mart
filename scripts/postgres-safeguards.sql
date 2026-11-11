@@ -1,11 +1,13 @@
 -- Run only on the dedicated disposable localhost database. Fixtures roll back.
+-- A NULL server address denotes a local Unix socket (used inside the CI container).
 \set ON_ERROR_STOP on
 BEGIN;
 DO $$
 DECLARE u int; t int; z int; c int; v int; o int; ordinary int; s text; previous timestamp;
 BEGIN
   IF current_database() !~ '^mtm_e2e_[A-Za-z0-9_]+_test$'
-     OR inet_server_addr() IS DISTINCT FROM '127.0.0.1'::inet THEN
+     OR (inet_server_addr() IS NOT NULL
+         AND inet_server_addr() NOT IN ('127.0.0.1'::inet, '::1'::inet)) THEN
     RAISE EXCEPTION 'Safeguard tests require the disposable localhost _test database';
   END IF;
   INSERT INTO users("openId") VALUES('postgres-migration-fictional') RETURNING id INTO u;
