@@ -111,7 +111,7 @@ export default function ReviewDemoSignIn() {
               />
             </label>
             <button className="mobile-auth-primary" disabled={busy}>
-              {busy ? "Opening demoÃ¢â‚¬Â¦" : "Sign in to demo"}
+              {busy ? "Opening demo..." : "Sign in to demo"}
             </button>
           </form>
           {error && (
@@ -130,7 +130,7 @@ export function ReviewDemoBanner() {
     [error, setError] = useState("");
   return (
     <aside className="review-demo-banner" aria-label="Demo workspace">
-      <strong>Demo only Ã‚- no real orders or payments</strong>
+      <strong>Demo only - no real orders or payments</strong>
       <span>
         Fictional shops and addresses. Please enter fictional details only.
       </span>
@@ -154,7 +154,7 @@ export function ReviewDemoBanner() {
           }
         }}
       >
-        {busy ? "LeavingÃ¢â‚¬Â¦" : "Exit demo"}
+        {busy ? "Leaving..." : "Exit demo"}
       </button>
       {error && <span role="alert">{error}</span>}
     </aside>
