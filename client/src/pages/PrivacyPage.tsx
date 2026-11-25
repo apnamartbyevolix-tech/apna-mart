@@ -6,8 +6,9 @@ import {Button} from '@/components/ui/button';
 export default function PrivacyPage({deletion=false}:{deletion?:boolean}) {
   const auth=useAuth();
   const request=trpc.support.create.useMutation();
-  const contact='apnamartbyevolix@gmail.com';
+  const contact='supportapnamart@gmail.com';
   return <div className="page-wrap"><div className="page-intro"><p className="eyebrow">APNA MART</p><h1>{deletion?'Request account deletion':'Your privacy'}</h1></div>
+    <p>Operated by EVOLIX Studio. Support: <a href={`mailto:${contact}`}>{contact}</a> · <a href="tel:+919098173239">+91 9098173239</a></p>
     {deletion ? <section className="panel-card">
       <p>You can ask us to close your Apna Mart account and remove your saved profile and addresses. We verify account ownership before processing a request.</p>
       <p>Orders, payment records and related dispute records may need to be retained. A request does not cancel an active order or erase a shop’s invoice in Apna Galla.</p>

@@ -282,10 +282,7 @@ export function LoginButton({
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="brand-lockup" aria-label="Apna Mart home">
-      <span className="brand-symbol">
-        <MapPin className="size-5" strokeWidth={2.4} />
-        <span className="brand-leaf" />
-      </span>
+      <img src="/brand/apna-mart-icon-192.png" alt="" width={36} height={36} className="shrink-0 object-contain" />
       {!compact && (
         <span className="brand-wordmark">
           Apna <b>Mart</b>

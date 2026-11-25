@@ -1,17 +1,28 @@
 apply plugin: 'com.android.application'
 
-// A localhost preview must never be packaged as a release by accident.
+// Upload keys are process-only inputs and never checked into source control.
+def uploadKeys = ['APNA_UPLOAD_STORE_FILE', 'APNA_UPLOAD_STORE_PASSWORD', 'APNA_UPLOAD_KEY_ALIAS', 'APNA_UPLOAD_KEY_PASSWORD']
+def hasUploadKey = uploadKeys.every { System.getenv(it) }
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && !hasUploadKey) {
+    throw new GradleException('A private upload signing key is required for a release build.')
+}
+
+// A release may load only the owner's production HTTPS customer app.
 def previewConfig = file('src/main/assets/capacitor.config.json')
 if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && previewConfig.exists()) {
     def nativeConfig = new groovy.json.JsonSlurper().parse(previewConfig)
-    if (nativeConfig.server?.url) throw new GradleException('Remove the debug preview URL and sync bundled assets before a release build.')
+    if (nativeConfig.appId != 'in.apnamart.app' || nativeConfig.appName != 'Apna Mart' ||
+        nativeConfig.server?.url != 'https://apna-mart.in' ||
+        nativeConfig.server?.cleartext != false || nativeConfig.android?.allowMixedContent != false) {
+        throw new GradleException('Sync the explicit production Android configuration before a release build; preview and unapproved origins are forbidden.')
+    }
 }
 
 android {
-    namespace "in.mytownmarket.customer.preview"
+    namespace "in.apnamart.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "in.mytownmarket.customer.preview"
+        applicationId "in.apnamart.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
@@ -23,6 +34,16 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasUploadKey) {
+            upload {
+                storeFile file(System.getenv('APNA_UPLOAD_STORE_FILE'))
+                storePassword System.getenv('APNA_UPLOAD_STORE_PASSWORD')
+                keyAlias System.getenv('APNA_UPLOAD_KEY_ALIAS')
+                keyPassword System.getenv('APNA_UPLOAD_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix '.debug'
@@ -31,6 +52,7 @@ android {
             resValue 'string', 'title_activity_main', 'Apna Mart Test'
         }
         release {
+            if (hasUploadKey) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

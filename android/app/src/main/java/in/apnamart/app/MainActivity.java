@@ -1,4 +1,4 @@
-package in.mytownmarket.customer.preview;
+package in.apnamart.app;
 
 import com.getcapacitor.BridgeActivity;
 import android.os.Bundle;
