@@ -20,6 +20,8 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://isolated_ci:isolated_ci_only@127.0.0.1:5432/mtm_e2e_ci_test
       MTM_RUN_ISOLATED_DB_TESTS: "1"
+      MTM_RUN_REVIEW_DB_TESTS: "1"
+      MTM_REVIEW_DATABASE_URL: postgresql://isolated_review_ci:isolated_review_ci_only@127.0.0.1:5432/mtm_e2e_review_ci_test
       MANUS_JWT_SECRET: isolated-ci-fixture-secret-never-used-for-production
       MYTOWN_ADMIN_EMAIL: isolated-platform-owner@example.invalid
     steps:
@@ -32,6 +34,14 @@ jobs:
       - run: pnpm check
       - run: pnpm db:migrate
       - run: pnpm exec tsx server/seed-demo.ts
+      - name: Create the second disposable database for reviewer isolation checks
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -U isolated_ci -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE isolated_review_ci LOGIN PASSWORD 'isolated_review_ci_only' NOINHERIT NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOSUPERUSER;
+          CREATE DATABASE mtm_e2e_review_ci_test OWNER isolated_review_ci;
+          \connect mtm_e2e_review_ci_test
+          GRANT USAGE, CREATE ON SCHEMA public TO isolated_review_ci;
+          SQL
       - run: pnpm test
       # Use the disposable service's local socket; its Docker network IP is not localhost.
       - run: docker exec -i "${{ job.services.postgres.id }}" psql -U isolated_ci -d mtm_e2e_ci_test -v ON_ERROR_STOP=1 < scripts/postgres-safeguards.sql
