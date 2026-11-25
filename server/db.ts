@@ -4,11 +4,33 @@ import { Pool } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { databaseConnectionConfig } from "./marketplace/database-config";
+import { isReviewDemo, reviewDemoConfig } from "./auth/review-demo-context";
+import { sql } from "drizzle-orm";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let reviewDb: Promise<ReturnType<typeof drizzle>> | undefined;
+
+async function getReviewDb() {
+  if (!reviewDb) reviewDb = (async () => {
+    const config = reviewDemoConfig();
+    if (!config) throw Error("Review database is disabled");
+    const pool = new Pool(config.connection);
+    const db = drizzle(pool);
+    try {
+      const marker = await db.execute(sql`SELECT purpose FROM review_demo_identity WHERE id=1`);
+      if (marker.rows[0]?.purpose !== "fictional-review-only-v1") throw Error("Invalid review database");
+      return db;
+    } catch {
+      await pool.end();
+      throw Error("The isolated review database is unavailable");
+    }
+  })().catch(error => { reviewDb = undefined; throw error; });
+  return reviewDb;
+}
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
+  if (isReviewDemo()) return getReviewDb();
   if (!_db && process.env.DATABASE_URL) {
     // Validate before pool creation; an isolation failure must not fall back to a raw URL.
     const connection = databaseConnectionConfig(process.env.DATABASE_URL);

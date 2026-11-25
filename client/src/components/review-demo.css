@@ -1,0 +1,22 @@
+.review-demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff4ce;
+  color: #493b0a;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.review-demo-banner span {
+  flex-basis: 100%;
+}
+.review-demo-banner button {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}

@@ -24,6 +24,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { ReviewDemoBanner } from "./ReviewDemoSignIn";
 import {
   formatINR,
   type MarketProduct,
@@ -337,6 +338,7 @@ export function MarketShell({ children }: { children: ReactNode }) {
     <div
       className={"app-frame" + (location === "/login" ? " login-route" : "")}
     >
+      {auth.user?.loginMethod === "review-demo" && <ReviewDemoBanner />}
       <div className="demo-strip">
         {workspace
           ? "Protected marketplace workspace · actions are authorized by the server"

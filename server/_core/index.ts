@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { registerMobileAuth } from "../auth/mobile-auth";
+import { registerReviewDemo } from "../auth/review-demo";
 import { registerApnaVendor } from "../integrations/apna-galla/vendor-http";
 import { registerApnaSandbox } from "../integrations/apna-galla/sandbox";
 import express from "express";
@@ -80,6 +81,7 @@ async function startServer() {
   // Render's edge is the single trusted hop. DNS-only custom domains reach it directly.
   if(process.env.RENDER==="true") app.set("trust proxy",1);
   const server = createServer(app);
+  registerReviewDemo(app);
   registerMobileAuth(app);
   registerApnaVendor(app);
   registerApnaSandbox(app);

@@ -23,10 +23,11 @@ import {
 } from "../../../drizzle/schema";
 import { SignedSandboxTransport } from "./transport";
 import type { Operation } from "./adapter";
+import { isReviewDemo } from "../../auth/review-demo-context";
 import { prepareCheckout } from "../../marketplace/checkout";
 
 export const sandboxEnabled = () =>
-  process.env.MTM_APNA_SANDBOX_ENABLED === "1" || process.env.MTM_APNA_CONNECTOR_MODE === "production";
+  !isReviewDemo() && (process.env.MTM_APNA_SANDBOX_ENABLED === "1" || process.env.MTM_APNA_CONNECTOR_MODE === "production");
 export const productionConnector = () => process.env.MTM_APNA_CONNECTOR_MODE === "production";
 export const protocolRevision = () => productionConnector() ? "1.2" : "1.2-sandbox";
 export function assertSandbox() {
@@ -348,6 +349,7 @@ export function registerApnaSandbox(app: Express) {
     }
   );
   app.use("/api/trpc", async (_req, _res, next) => {
+    if (isReviewDemo()) return next();
     try {
       await refreshLinkedEligibility();
       next();

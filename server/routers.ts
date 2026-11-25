@@ -3,6 +3,8 @@ import {validShopHours,withinShopHours} from '../shared/shop-hours';
 import {logoutMobileRequest} from './auth/mobile-auth';
 import {vendorBridgeContext} from "./marketplace/vendor-context";
 import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
+import { isReviewDemo } from "./auth/review-demo-context";
+import { logoutReviewRequest } from "./auth/review-demo";
 import { randomUUID } from "node:crypto";
 import { connectorStatus } from './integrations/apna-galla/adapter';
 import { answerLocalHelp, localAssistantEnabled } from './marketplace/local-assistant';
@@ -885,6 +887,7 @@ export function verifyLocalHostRequest(req: any): void {
 }
 
 function requireLocalMarketplace(req: any) {
+  if (isReviewDemo()) return; // Authenticated requests use a distinct fictional database.
   // Until real subscriber verification exists, catalogue access and new orders stay local.
   if (ENV.isProduction || process.env.PUBLIC_PREVIEW === "1")
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The marketplace is not open for public shopping yet." });
@@ -910,6 +913,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(async ({ ctx }) => {
+      await logoutReviewRequest(ctx.req,ctx.res);
       await logoutMobileRequest(ctx.req,ctx.res);
       const options = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...options, maxAge: -1 });

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import "./mobile-sign-in.css";
+import ReviewDemoSignIn from "@/components/ReviewDemoSignIn";
 export default function MobileSignIn() {
   const [status, setStatus] = useState<{
       enabled: boolean;
@@ -91,12 +92,16 @@ export default function MobileSignIn() {
   if (loading) return <p role="status">Opening secure mobile sign-in…</p>;
   if (!status?.enabled)
     return (
+      <>
       <p role="status" className="mobile-auth-disabled">
         {error ||
           "Mobile sign-in will be available here once SMS delivery is configured."}
       </p>
+      <ReviewDemoSignIn />
+      </>
     );
   return (
+    <>
     <section className="mobile-auth-card">
       <span className="mobile-auth-icon">
         <Smartphone size={25} />
@@ -211,5 +216,7 @@ export default function MobileSignIn() {
         Your account stays signed in on this device. Sign out on shared devices.
       </p>
     </section>
+    <ReviewDemoSignIn />
+    </>
   );
 }

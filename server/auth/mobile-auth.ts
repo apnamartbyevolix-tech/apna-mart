@@ -402,6 +402,8 @@ export async function finishCustomerLogin(
     maxAge: 30 * 86400000,
   });
   res.clearCookie(bindingName(), cookieOptions());
+  // A normal verified phone sign-in always leaves the separate demo workspace.
+  res.clearCookie(process.env.NODE_ENV === "production" ? "__Host-mtm_review" : "mtm_review_local", cookieOptions());
   return { success: true };
 }
 export async function authenticateMobileRequest(req: Request) {
