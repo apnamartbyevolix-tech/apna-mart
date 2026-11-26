@@ -1304,3 +1304,27 @@
 }
 .app-frame .product-card .product-unit,.app-frame .product-card .product-shop{color:#53694a;font-size:12px}.app-frame .product-card .product-buy del{color:#657358;font-size:11px}.app-frame .product-card .product-title{font-size:14px;line-height:1.45}.app-frame .discover-filter-row button:not(.selected){color:#526b47}.app-frame .product-card .product-offer-limit{color:#52694a;font-size:11px}
 @media(max-width:640px){.app-frame .product-card .product-title{font-size:13px}.app-frame .product-card .product-unit,.app-frame .product-card .product-shop{font-size:11px}}
+
+/* Location controls have their own labels and can shrink without displacing the cart. */
+.market-header .location-field { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
+.market-header .location-field > span { display: block; color: #53694a; font-size: 11px; font-weight: 600; }
+.market-header .location-picker > span { min-width: 0; }
+.market-header .location-picker select { text-overflow: ellipsis; }
+.header-links, .header-icon-link { min-width: 0; }
+.header-icon-link > span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.customer-dock { padding-bottom: env(safe-area-inset-bottom); }
+@media(max-width:640px) {
+  .market-header .location-picker > span > small { display: none; }
+  .market-header .location-picker select { min-height: 44px; font-size: 13px; padding: 8px; }
+  .market-header .location-picker > svg { display: none; }
+  .market-header .header-icon-link { min-width: 44px; justify-content: center; }
+  .market-header .location-picker { align-items: stretch; }
+  .discover-hero h1 { max-width: 240px; font-size: 32px; }
+  .discover-hero p { max-width: 190px; font-size: 14px; }
+  .discover-hero .grocery-illustration { opacity: .45; pointer-events: none; }
+  .discover-hero-button { position: relative; z-index: 2; font-size: 14px; }
+  .checkout-grid, .checkout-main, .checkout-summary, .order-detail-grid > *, .workspace-panel { min-width: 0; }
+  .checkout-summary, .order-detail-grid, .order-row { overflow-wrap: anywhere; }
+  .product-buy { flex-wrap: wrap; gap: 8px; }
+  .product-add-text { min-height: 44px; }
+}

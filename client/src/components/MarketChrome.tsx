@@ -342,7 +342,7 @@ export function MarketShell({ children }: { children: ReactNode }) {
       <div className="demo-strip">
         {workspace
           ? "Protected marketplace workspace · actions are authorized by the server"
-          : "Fictional demo listings are labelled · prices and stock come from the marketplace database"}
+          : "Your local shops · Shop prices · Delivery or pickup"}
       </div>
       <header className="market-header">
         <div className="header-main">
@@ -360,6 +360,8 @@ export function MarketShell({ children }: { children: ReactNode }) {
                     ? "SHOP IN"
                     : "NO ACTIVE SERVICE AREAS"}
               </small>
+              <label className="location-field">
+                <span>Town</span>
               <select
                 aria-label="Town"
                 value={townId ? String(townId) : ""}
@@ -373,6 +375,9 @@ export function MarketShell({ children }: { children: ReactNode }) {
                   </option>
                 ))}
               </select>
+              </label>
+              <label className="location-field">
+                <span>Service area</span>
               <select
                 aria-label="Service area"
                 value={zoneChoice}
@@ -390,6 +395,7 @@ export function MarketShell({ children }: { children: ReactNode }) {
                   </option>
                 ))}
               </select>
+              </label>
               {zoneId && (
                 <small className="selected-locality">
                   {locality} · service area selected
