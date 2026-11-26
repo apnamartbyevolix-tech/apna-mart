@@ -1,6 +1,6 @@
 /** v1.2-sandbox implementation, confined to disposable localhost databases. */
 import express, { type Express } from "express";
-import {verifyConnection,validateLinkAuth} from './link-auth';
+import {verifyConnection} from './link-auth';
 import {withinShopHours} from '../../../shared/shop-hours';
 import {
   randomUUID,
@@ -26,40 +26,8 @@ import type { Operation } from "./adapter";
 import { isReviewDemo } from "../../auth/review-demo-context";
 import { prepareCheckout } from "../../marketplace/checkout";
 
-export const sandboxEnabled = () =>
-  !isReviewDemo() && (process.env.MTM_APNA_SANDBOX_ENABLED === "1" || process.env.MTM_APNA_CONNECTOR_MODE === "production");
-export const productionConnector = () => process.env.MTM_APNA_CONNECTOR_MODE === "production";
-export const protocolRevision = () => productionConnector() ? "1.2" : "1.2-sandbox";
-export function assertSandbox() {
-  validateLinkAuth();
-  const u = new URL(process.env.DATABASE_URL || "");
-  const peer = new URL(process.env.APNA_SANDBOX_URL || "");
-  if (productionConnector()) {
-    if (process.env.NODE_ENV !== "production" || process.env.MTM_APNA_SANDBOX_ENABLED === "1" ||
-        !["postgres:","postgresql:"].includes(u.protocol) || ["localhost","127.0.0.1","[::1]"].includes(u.hostname) ||
-        peer.href !== "https://api.apnagalla.in/" || process.env.MYTOWN_LINK_AUTH !== "ed25519-v1" || process.env.MYTOWN_LINK_SELF !== "mytown" ||
-        (process.env.APNA_SANDBOX_KEY||"").length<32 || (process.env.APNA_SANDBOX_SECRET||"").length<32)
-      throw Error("Explicit production Apna Galla connection with pinned server identities is required");
-    return;
-  }
-  if (
-    !sandboxEnabled() ||
-    process.env.NODE_ENV === "production" ||
-    !["127.0.0.1", "localhost", "::1"].includes(process.env.HOST || "") ||
-    !["localhost", "127.0.0.1"].includes(u.hostname) ||
-    !u.pathname.endsWith("_test") ||
-    peer.protocol !== "https:" ||
-    peer.hostname !== "localhost" ||
-    peer.pathname !== "/" ||
-    peer.search ||
-    peer.hash ||
-    peer.username ||
-    peer.password ||
-    (process.env.APNA_SANDBOX_KEY || "").length < 32 ||
-    (process.env.APNA_SANDBOX_SECRET || "").length < 32
-  )
-    throw Error("Isolated localhost Apna sandbox required");
-}
+export { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
+import { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
 const rows = async (db: any, q: any): Promise<any[]> => {
   const r = await db.execute(q);
   return r.rows as any[];
@@ -87,7 +55,8 @@ function transport() {
   });
 }
 const wire = (op: Operation, b: any, key: string) =>
-  transport().post(op, { ...b, revision: protocolRevision() }, key);
+  transport().post(op, { ...b, revision: protocolRevision() }, key,
+    op === "verifyMerchant" ? { maxAttempts: 1, timeoutMs: 2500 } : undefined);
 const unavailable = () =>
   new TRPCError({
     code: "PRECONDITION_FAILED",
@@ -98,6 +67,7 @@ async function verify(merchantId: string) {
   const v: any = await wire("verifyMerchant", { merchantId }, randomUUID());
   if (
     v?.isValid !== true ||
+    v.currency !== "INR" ||
     v.marketplaceEnabled !== true ||
     v.live !== true ||
     typeof v.tier !== "string" ||
@@ -141,33 +111,59 @@ const catalogueSchema = z
       .max(30),
   })
   .strict();
-let refreshAt = 0,
-  refreshing: Promise<void> | undefined;
-export async function refreshLinkedEligibility() {
-  if (!sandboxEnabled() || Date.now() < refreshAt) return;
-  if (refreshing) return refreshing;
-  refreshing = (async () => {
-    const db = await getDb();
-    if (!db) throw unavailable();
-    const links = await rows(db, sql`SELECT * FROM apna_links`);
-    for (const l of links) {
-      let valid = false;
-      try {
-        await verify(l.merchant_id);
-        valid = !!l.live;
-      } catch {}
-      const [shop]=await db.select({settings:vendorProfiles.settings}).from(vendorProfiles).where(eq(vendorProfiles.id,l.vendor_id));
-      await db
-        .update(vendorProfiles)
-        .set({ status: valid ? "approved" : "suspended", isOpen: valid&&withinShopHours(shop?.settings) })
-        .where(eq(vendorProfiles.id, l.vendor_id));
+type EligibilityScope = { townId?: number; zoneId?: number; vendorId?: number };
+const eligibilityChecks = new Map<string, { until: number; pending?: Promise<void> }>();
+export async function refreshLinkedEligibility(scope: EligibilityScope = {}) {
+  if (!sandboxEnabled()) return;
+  assertSandbox();
+  const db = await getDb();
+  if (!db) throw unavailable();
+  const links = await rows(db, sql`SELECT l.* FROM apna_links l
+    JOIN vendor_profiles v ON v.id=l.vendor_id
+    WHERE ${scope.townId ? sql`v."townId"=${scope.townId}` : sql`true`}
+      AND ${scope.zoneId ? sql`v."zoneId"=${scope.zoneId}` : sql`true`}
+      AND ${scope.vendorId ? sql`l.vendor_id=${scope.vendorId}` : sql`true`}`);
+  // Bound discovery latency and peer concurrency. Any rows not freshly verified
+  // are excluded by the SQL publication condition, including after an outage.
+  const deadline = Date.now() + 4500;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < links.length && Date.now() < deadline) {
+      const l = links[cursor++];
+      const cacheKey = l.merchant_id + ":" + l.version;
+      const cached = eligibilityChecks.get(cacheKey);
+      if (cached?.pending) { await cached.pending; continue; }
+      if (cached && cached.until > Date.now()) continue;
+      const check = { until: 0, pending: undefined as Promise<void> | undefined };
+      check.pending = (async () => {
+        let verified: any;
+        try { if (l.live) verified = await verify(l.merchant_id); } catch {}
+        const valid = !!verified && !!l.live;
+        await db!.transaction(async tx => {
+          // Recheck the catalogue version under its lock: a completed check of
+          // an older live version must never undo a newer owner pause.
+          const current = (await rows(tx, sql`SELECT version,live FROM apna_links
+            WHERE merchant_id=${l.merchant_id} FOR UPDATE`))[0];
+          if (!current || current.version !== l.version || current.live !== l.live) return;
+          const [shop] = await tx.select({ settings: vendorProfiles.settings })
+            .from(vendorProfiles).where(eq(vendorProfiles.id, l.vendor_id));
+          await tx.execute(sql`UPDATE apna_links SET
+            verified_at=${valid ? new Date() : new Date(0)},
+            expires_at=${verified ? new Date(verified.expiresAt) : new Date(l.expires_at)}
+            WHERE merchant_id=${l.merchant_id}`);
+          await tx.update(vendorProfiles).set({ status: valid ? "approved" : "suspended",
+            isOpen: valid && withinShopHours(shop?.settings) }).where(eq(vendorProfiles.id, l.vendor_id));
+        });
+        check.until = Date.now() + 5000;
+      })();
+      eligibilityChecks.set(cacheKey, check);
+      try { await check.pending; }
+      finally { check.pending = undefined; }
     }
-    refreshAt = Date.now() + 5000;
-  })();
-  try {
-    await refreshing;
-  } finally {
-    refreshing = undefined;
+  }
+  await Promise.all(Array.from({ length: Math.min(4, links.length) }, worker));
+  if (eligibilityChecks.size > 10000) {
+    for (const [key, value] of eligibilityChecks) if (!value.pending && value.until < Date.now()) eligibilityChecks.delete(key);
   }
 }
 export function registerApnaSandbox(app: Express) {
@@ -337,7 +333,7 @@ export function registerApnaSandbox(app: Express) {
             sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${b.merchantId},${vendorId},${b.version},${b.live},${new Date(b.eligibility.expiresAt)},now()) ON CONFLICT (merchant_id) DO UPDATE SET version=EXCLUDED.version,live=EXCLUDED.live,expires_at=EXCLUDED.expires_at,verified_at=now()`
           );
         });
-        refreshAt = 0;
+        for (const key of eligibilityChecks.keys()) if (key.startsWith(b.merchantId + ":")) eligibilityChecks.delete(key);
         res.json({ success: true });
       } catch {
         res
@@ -348,15 +344,6 @@ export function registerApnaSandbox(app: Express) {
       }
     }
   );
-  app.use("/api/trpc", async (_req, _res, next) => {
-    if (isReviewDemo()) return next();
-    try {
-      await refreshLinkedEligibility();
-      next();
-    } catch {
-      next(unavailable());
-    }
-  });
   let pumping = false;
   const timer = setInterval(async () => {
     if (pumping) return;
@@ -437,7 +424,11 @@ export async function reserveForCheckout(
       sql`SELECT * FROM apna_links WHERE vendor_id=${input.shopId}`
     )
   )[0];
-  if (!l) return;
+  if (!l) {
+    if (productionConnector()) throw unavailable();
+    return;
+  }
+  if (!l.live) throw unavailable();
   await verify(l.merchant_id);
   const trusted = await trustedCheckoutStock(db, input, user.id);
   const prepared = await db.transaction((tx: any) =>

@@ -42,31 +42,37 @@ export class SignedSandboxTransport {
         !config.allowedSandboxHosts.includes(this.base.hostname) || !config.apiKey || !config.signingSecret)
       throw new Error('An explicitly approved HTTPS sandbox and server credentials are required.');
   }
-  async post(operation: Operation, payload: unknown, idempotencyKey: string): Promise<unknown> {
+  async post(operation: Operation, payload: unknown, idempotencyKey: string,
+    options: { maxAttempts?: number; timeoutMs?: number } = {}): Promise<unknown> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey))
       throw new Error('Persist a UUIDv4 idempotency key before dispatch.');
     const body = JSON.stringify(payload);
     if (!body || Buffer.byteLength(body) > 65536) throw new Error('Invalid request size.');
-    for (let attempt = 0; attempt < 5; attempt++) {
+    const maxAttempts = options.maxAttempts ?? 5;
+    const timeoutMs = options.timeoutMs ?? 4000;
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5 ||
+        !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 4000)
+      throw new Error('Invalid request retry policy.');
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const signature = this.config.encodeSignature(createHmac('sha256', this.config.signingSecret).update(timestamp+'.'+body).digest());
       let response: WireResponse;
       try {
-        response = await this.send({url: new URL(APNA_ROUTES[operation], this.base), body, timeoutMs:4000, headers:{
+        response = await this.send({url: new URL(APNA_ROUTES[operation], this.base), body, timeoutMs, headers:{
           'Content-Type':'application/json', 'Content-Length':String(Buffer.byteLength(body)),
           'X-Apna-Galla-Key':this.config.apiKey, 'X-Apna-Galla-Signature':signature,
           'X-Apna-Galla-Timestamp':timestamp, 'Idempotency-Key':idempotencyKey,
           ...connectionHeaders('mytown','POST',APNA_ROUTES[operation],Buffer.from(body),idempotencyKey),
         }});
       } catch {
-        if (attempt === 4) throw new ApnaTransportError('UNAVAILABLE', true);
+        if (attempt === maxAttempts - 1) throw new ApnaTransportError('UNAVAILABLE', true);
         await this.sleep(Math.min(60000, 2**(attempt+1)*1000+Math.floor(Math.random()*250))); continue;
       }
       if (response.status >= 200 && response.status < 300) {
         try { return JSON.parse(response.body); } catch { throw new ApnaTransportError('INVALID_RESPONSE', true); }
       }
       if (response.status === 429 || response.status >= 500) {
-        if (attempt === 4) throw new ApnaTransportError('UNAVAILABLE', true);
+        if (attempt === maxAttempts - 1) throw new ApnaTransportError('UNAVAILABLE', true);
         await this.sleep(Math.min(60000,2**(attempt+1)*1000+Math.floor(Math.random()*250))); continue;
       }
       throw new ApnaTransportError('REJECTED', response.status === 409);

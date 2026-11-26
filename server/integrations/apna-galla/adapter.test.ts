@@ -19,6 +19,12 @@ describe('signed sandbox transport',()=>{
   it('rejects HTTP, unknown hosts and embedded credentials before transmission',()=>{
     for(const baseUrl of ['http://sandbox.example.invalid','https://api.apnagalla.in','https://user:secret@sandbox.example.invalid'])expect(()=>new SignedSandboxTransport({...config,baseUrl})).toThrow('approved HTTPS sandbox');
   });
+  it('bounds discovery verification to one short attempt without backoff',async()=>{
+    const send=vi.fn(async(input:WireRequest)=>{expect(input.timeoutMs).toBe(2500);throw Error('offline');});
+    const sleep=vi.fn(async()=>{});
+    await expect(new SignedSandboxTransport(config,send,sleep).post('verifyMerchant',{},randomUUID(),{maxAttempts:1,timeoutMs:2500})).rejects.toMatchObject({code:'UNAVAILABLE'});
+    expect(send).toHaveBeenCalledOnce();expect(sleep).not.toHaveBeenCalled();
+  });
   it('retains the same key/body on transient retries and signs exact bytes',async()=>{
     const calls:WireRequest[]=[];const send=vi.fn(async(input:WireRequest)=>{calls.push(input);return calls.length===1?{status:503,body:'private upstream body'}:{status:200,body:'{"ok":true}'};});
     const sleep=vi.fn(async()=>{}),key=randomUUID();

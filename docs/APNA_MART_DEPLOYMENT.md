@@ -29,6 +29,18 @@ Business Details. The launch supports INR, zero-GST ordinary whole-unit stock,
 up to 30 shared items, cash on delivery/pickup and seller-managed fulfilment.
 Unknown stock/cost is not made known by publication.
 
+Customer browsing and checkout use the explicit production connector, rather
+than the former local-only marketplace gate. Discovery refreshes eligibility
+only for the selected service area (four concurrent checks, one 2.5-second
+attempt per merchant). Listings require a live, unexpired link verified within
+15 seconds. Failed checks hide the seller; checkout separately verifies the
+merchant and reserves stock. Only mapped, non-demo products from non-demo
+linked sellers are public in production. Local connected fixtures retain their
+demo labels, and reviewer access still uses its separate fictional database.
+Customer credentials cannot access legacy merchant procedures; signed Apna
+Galla vendor requests retain access, including handling existing paused-shop
+orders. No database migration is required by this change.
+
 Reservations protect counter stock. Accepted order prices are preserved when
 an offer changes. Durable retry identities and database triggers protect order
 transitions and exactly-once sale/release/return work. Invoice posting uses

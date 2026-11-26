@@ -2,7 +2,9 @@ import {activeOffer,effectiveProduct} from "../shared/offers";
 import {validShopHours,withinShopHours} from '../shared/shop-hours';
 import {logoutMobileRequest} from './auth/mobile-auth';
 import {vendorBridgeContext} from "./marketplace/vendor-context";
-import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus } from "./integrations/apna-galla/sandbox";
+import { reserveForCheckout, attachCheckout, trustedCheckoutStock, orderSyncStatus, refreshLinkedEligibility } from "./integrations/apna-galla/sandbox";
+import { assertSandbox, productionConnector, sandboxEnabled } from "./integrations/apna-galla/config";
+import { publishedSellerCondition, publishedProductCondition } from "./marketplace/publication-policy";
 import { isReviewDemo } from "./auth/review-demo-context";
 import { logoutReviewRequest } from "./auth/review-demo";
 import { randomUUID } from "node:crypto";
@@ -888,14 +890,15 @@ export function verifyLocalHostRequest(req: any): void {
 
 function requireLocalMarketplace(req: any) {
   if (isReviewDemo()) return; // Authenticated requests use a distinct fictional database.
-  // Until real subscriber verification exists, catalogue access and new orders stay local.
+  // Public shopping requires the pinned, explicitly configured ERP connection.
+  if (productionConnector()) { assertSandbox(); return; }
   if (ENV.isProduction || process.env.PUBLIC_PREVIEW === "1")
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The marketplace is not open for public shopping yet." });
   verifyLocalHostRequest(req);
   verifyIsolatedDevDatabaseUrl(process.env.DATABASE_URL);
 }
 
-const apnaVendorProcedure=protectedProcedure.use(async({next})=>{if(process.env.MTM_APNA_SANDBOX_ENABLED==='1'&&!vendorBridgeContext.getStore())throw new TRPCError({code:"FORBIDDEN",message:"Manage your shop through Apna Galla"});return next();});
+const apnaVendorProcedure=protectedProcedure.use(async({next})=>{if((sandboxEnabled() || ENV.isProduction || process.env.PUBLIC_PREVIEW==='1')&&!vendorBridgeContext.getStore())throw new TRPCError({code:"FORBIDDEN",message:"Manage your shop through Apna Galla"});return next();});
 export const appRouter = router({
   system: systemRouter,
   integration: router({ status: adminProcedure.query(() => connectorStatus()) }),
@@ -906,7 +909,8 @@ export const appRouter = router({
       return {enabled:true};
     }),
     ask: protectedProcedure.input(z.object({question:z.string().trim().min(1).max(1200)})).mutation(({ctx,input}) => {
-      requireLocalMarketplace(ctx.req);
+      verifyLocalHostRequest(ctx.req);
+      verifyIsolatedDevDatabaseUrl(process.env.DATABASE_URL);
       return answerLocalHelp(ctx.user.id,input.question);
     }),
   }),
@@ -1321,7 +1325,9 @@ export const appRouter = router({
     toggleFavorite: protectedProcedure
       .input(z.object({ shopId: z.number().int().positive(), townId: z.number().int().positive(), zoneId: z.number().int().positive(), favorited: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
+        requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
         const [shop] = await db.select({ id: vendorProfiles.id })
           .from(vendorProfiles)
@@ -1332,6 +1338,7 @@ export const appRouter = router({
             eq(vendorProfiles.townId, input.townId),
             eq(vendorProfiles.zoneId, input.zoneId),
             eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
             eq(vendorProfiles.isOpen, true),
             eq(serviceZones.id, input.zoneId),
             eq(serviceZones.townId, input.townId),
@@ -1351,7 +1358,9 @@ export const appRouter = router({
     favoriteShops: protectedProcedure
       .input(z.object({ townId: z.number().int().positive(), zoneId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
+        requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
         const rows = await db.select({ shop: vendorProfiles, zone: serviceZones, category: categories, townName: towns.name })
           .from(favoriteShops)
@@ -1364,6 +1373,7 @@ export const appRouter = router({
             eq(vendorProfiles.townId, input.townId),
             eq(vendorProfiles.zoneId, input.zoneId),
             eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
             eq(vendorProfiles.isOpen, true),
             eq(serviceZones.active, true),
             eq(serviceZones.townId, input.townId),
@@ -1420,6 +1430,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
         const activeCategories = await db
           .select()
@@ -1442,6 +1453,7 @@ export const appRouter = router({
           .where(
             and(
               eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
               eq(vendorProfiles.isOpen, true),
               eq(serviceZones.active, true),
               eq(towns.active, true),
@@ -1463,6 +1475,7 @@ export const appRouter = router({
                 and(
                   inArray(products.vendorId, shopIds),
                   eq(products.availability, "available"),
+                  publishedProductCondition(products.id, products.vendorId, products.isDemo),
                   eq(categories.enabled, true),
                   eq(categories.regulated, false)
                 )
@@ -1489,9 +1502,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
-        const shopConditions = [
+        const shopConditions: (ReturnType<typeof eq> | undefined)[] = [
           eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
           eq(vendorProfiles.isOpen, true),
           eq(serviceZones.active, true),
           eq(towns.active, true),
@@ -1533,6 +1548,7 @@ export const appRouter = router({
       .where(
         and(
           eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
           eq(vendorProfiles.isOpen, true),
           eq(serviceZones.active, true),
           eq(towns.active, true),
@@ -1543,8 +1559,9 @@ export const appRouter = router({
             )
           );
         const vendorIds = productVendors.map(x => x.id);
-        const productConds = [
+        const productConds: (ReturnType<typeof eq> | undefined)[] = [
           eq(products.availability, "available"),
+                  publishedProductCondition(products.id, products.vendorId, products.isDemo),
           eq(categories.enabled, true),
           eq(categories.regulated, false),
           ...(vendorIds.length
@@ -1585,6 +1602,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
         const [shop] = await db
           .select({
@@ -1601,6 +1619,7 @@ export const appRouter = router({
             and(
               eq(vendorProfiles.id, input.shopId),
               eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
               eq(serviceZones.active, true),
               eq(towns.active, true),
               eq(categories.enabled, true),
@@ -1619,6 +1638,7 @@ export const appRouter = router({
             and(
               eq(products.vendorId, input.shopId),
               eq(products.availability, "available"),
+                  publishedProductCondition(products.id, products.vendorId, products.isDemo),
               eq(categories.enabled, true),
               eq(categories.regulated, false)
             )
@@ -1640,6 +1660,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ townId: input.townId, zoneId: input.zoneId });
         await requireActiveServiceZone(db, input.townId, input.zoneId);
         const [p] = await db
           .select({
@@ -1659,7 +1680,9 @@ export const appRouter = router({
             and(
               eq(products.id, input.productId),
               eq(products.availability, "available"),
+                  publishedProductCondition(products.id, products.vendorId, products.isDemo),
               eq(vendorProfiles.status, "approved"),
+            publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
               eq(serviceZones.active, true),
               eq(towns.active, true),
               eq(categories.enabled, true),
@@ -1694,6 +1717,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         requireLocalMarketplace(ctx.req);
         const db = await database();
+        await refreshLinkedEligibility({ vendorId: input.shopId });
         return db.transaction(async tx => (await prepareCheckout(tx, input, ctx.user)).quote);
       }),
     placeOrder: protectedProcedure
@@ -1715,6 +1739,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (prior) return duplicateCheckout(db, prior, input, ctx.user.id);
+        await refreshLinkedEligibility({ vendorId: input.shopId });
         const apnaHold = await reserveForCheckout(db, input, ctx.user);
         try {
           return await db.transaction(async tx => {

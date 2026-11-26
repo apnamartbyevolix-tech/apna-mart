@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { and, eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { publishedSellerCondition, publishedProductCondition } from "./publication-policy";
+import { prepareCheckout } from "./checkout";
 import { appRouter } from "../routers";
 import { getDb, upsertUser } from "../db";
 import type { TrpcContext } from "../_core/context";
@@ -246,6 +248,42 @@ const workflow = describe.skipIf(!integrationEnabled)(
 
     afterAll(async () => {
       if (db) await db.$client.end();
+    });
+
+    it("requires a fresh live ERP link and mapped non-demo products for connected checkout", async () => {
+      const f = await catalogFixture();
+      const merchant = randomUUID();
+      const input = { ...f.scope, shopId: f.shopId, items: [{productId:f.productId,quantity:1}], fulfillmentType:"pickup" as const, paymentMethod:"pickup" as const };
+      vi.stubEnv("MTM_APNA_CONNECTOR_MODE", "production");
+      try {
+        const quote = () => db.transaction(tx => prepareCheckout(tx,input,customer));
+        const sellers = () => db.select({id:vendorProfiles.id}).from(vendorProfiles).where(and(eq(vendorProfiles.id,f.shopId),publishedSellerCondition(vendorProfiles.id,vendorProfiles.isDemo)));
+        const visibleProducts = () => db.select({id:products.id}).from(products).where(and(eq(products.id,f.productId),publishedProductCondition(products.id,products.vendorId,products.isDemo)));
+        expect(await sellers()).toHaveLength(0);
+        await expect(quote()).rejects.toMatchObject({code:"PRECONDITION_FAILED"});
+        await db.execute(sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${merchant},${f.shopId},1,true,(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')+INTERVAL '1 hour',(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))`);
+        // Fictional data stays invisible in production even with a link.
+        expect(await sellers()).toHaveLength(0);
+        await db.update(vendorProfiles).set({isDemo:false}).where(eq(vendorProfiles.id,f.shopId));
+        expect(await sellers()).toHaveLength(1);
+        expect(await visibleProducts()).toHaveLength(0);
+        await db.update(products).set({isDemo:false}).where(eq(products.id,f.productId));
+        expect(await visibleProducts()).toHaveLength(0);
+        await db.execute(sql`INSERT INTO apna_products(product_id,vendor_id,sku) VALUES(${f.productId},${f.shopId},'test-sku')`);
+        expect(await visibleProducts()).toHaveLength(1);
+        expect((await quote()).quote.totals.totalPaise).toBe(1299);
+        for(const change of [sql`verified_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')-INTERVAL '30 seconds'`,sql`verified_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),live=false`,sql`live=true,expires_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')-INTERVAL '1 second'`]) {
+          await db.execute(sql`UPDATE apna_links SET ${change} WHERE merchant_id=${merchant}`);
+          expect(await sellers()).toHaveLength(0);
+          await expect(quote()).rejects.toMatchObject({code:"PRECONDITION_FAILED"});
+        }
+        // Local connected fixtures keep their explicit demo labels.
+        await db.execute(sql`UPDATE apna_links SET live=true,expires_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')+INTERVAL '1 hour',verified_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE merchant_id=${merchant}`);
+        await db.update(vendorProfiles).set({isDemo:true}).where(eq(vendorProfiles.id,f.shopId));
+        await db.update(products).set({isDemo:true}).where(eq(products.id,f.productId));
+        vi.stubEnv("MTM_APNA_CONNECTOR_MODE", ""); vi.stubEnv("MTM_APNA_SANDBOX_ENABLED", "1");
+        expect(await sellers()).toHaveLength(1); expect(await visibleProducts()).toHaveLength(1);
+      } finally { vi.unstubAllEnvs(); }
     });
 
     it("requires a reviewed quote before any checkout effects", async () => {

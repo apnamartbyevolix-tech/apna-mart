@@ -1,5 +1,6 @@
 import {activeOffer,effectiveProduct} from "../../shared/offers";
 import {withinShopHours} from '../../shared/shop-hours';
+import { connectedCatalogue, publishedSellerCondition, publishedProductCondition } from './publication-policy';
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -77,6 +78,7 @@ export async function prepareCheckout(
         eq(vendorProfiles.id, input.shopId),
         eq(vendorProfiles.townId, input.townId),
         eq(vendorProfiles.status, "approved"),
+        publishedSellerCondition(vendorProfiles.id, vendorProfiles.isDemo),
         eq(vendorProfiles.isOpen, true)
       )
     )
@@ -87,7 +89,7 @@ export async function prepareCheckout(
       code: "PRECONDITION_FAILED",
       message: "Shop is not accepting orders in the selected town",
     });
-  if(process.env.MTM_APNA_SANDBOX_ENABLED==='1'&&!withinShopHours(shop.settings))throw new TRPCError({code:'PRECONDITION_FAILED',message:'This shop is outside its online opening hours (India time)'});
+  if(connectedCatalogue()&&!withinShopHours(shop.settings))throw new TRPCError({code:'PRECONDITION_FAILED',message:'This shop is outside its online opening hours (India time)'});
   const [activeTown] = await tx
     .select({ id: towns.id })
     .from(towns)
@@ -201,7 +203,7 @@ export async function prepareCheckout(
     .select({ product: products, category: categories })
     .from(products)
     .innerJoin(categories, eq(products.categoryId, categories.id))
-    .where(and(inArray(products.id, ids), eq(products.vendorId, shop.id)))
+    .where(and(inArray(products.id, ids), eq(products.vendorId, shop.id), publishedProductCondition(products.id, products.vendorId, products.isDemo)))
     .for("update");
   for (const row of productRows) {
     if (
