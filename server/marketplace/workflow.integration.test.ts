@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { publishedSellerCondition, publishedProductCondition } from "./publication-policy";
 import { prepareCheckout } from "./checkout";
+import { provisionPublishedLocation } from "./published-location";
 import { appRouter } from "../routers";
 import { getDb, upsertUser } from "../db";
 import type { TrpcContext } from "../_core/context";
@@ -248,6 +249,21 @@ const workflow = describe.skipIf(!integrationEnabled)(
 
     afterAll(async () => {
       if (db) await db.$client.end();
+    });
+
+    it("persists a published shop's pincode, reuses its area and preserves disabled service areas", async () => {
+      const shop = {city:`Isolated town ${randomUUID()}`,state:"Test State",postalCode:"458226"};
+      const publish = () => db.transaction(tx=>provisionPublishedLocation(tx,shop));
+      const first = await publish();
+      const [zone] = await db.select().from(serviceZones).where(eq(serviceZones.id,first.zoneId));
+      expect(zone.postalCode).toBe("458226");
+      expect(await publish()).toEqual(first);
+      const other = await db.transaction(tx=>provisionPublishedLocation(tx,{...shop,city:`Other ${shop.city}`}));
+      expect(other.townId).not.toBe(first.townId); expect(other.zoneId).not.toBe(first.zoneId);
+      await db.update(serviceZones).set({active:false}).where(eq(serviceZones.id,first.zoneId));
+      await publish();
+      const [disabled] = await db.select().from(serviceZones).where(eq(serviceZones.id,first.zoneId));
+      expect(disabled.active).toBe(false);
     });
 
     it("requires a fresh live ERP link and mapped non-demo products for connected checkout", async () => {

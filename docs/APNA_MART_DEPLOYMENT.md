@@ -29,6 +29,27 @@ Business Details. The launch supports INR, zero-GST ordinary whole-unit stock,
 up to 30 shared items, cash on delivery/pickup and seller-managed fulfilment.
 Unknown stock/cost is not made known by publication.
 
+## Town and pincode matching
+
+Signing up or adding private inventory does not publish a shop. An eligible
+owner saves the public shop address, city, state and six-digit postal code,
+selects supported items and explicitly publishes through Go live. A signed
+publication creates or reuses the town and its pincode service area. Town
+identity is case-insensitive city plus state; zone identity is scoped to that
+town. This is manual area selection, not GPS or delivery-radius matching.
+
+The connector persists postalCode as well as the zone name/slug and repairs
+missing postalCode values on subsequent signed publications. It preserves
+existing disabled areas. An operator can separately enable a real town/area
+on an explicit owner request without publishing fictional shops. Customer
+browsing remains area-scoped; delivery additionally validates the selected
+address against that service area.
+
+The 26 November follow-up passed the complete isolated PostgreSQL suite:
+345 passed, 0 failed, 0 skipped, including pincode persistence, repeated
+publication, cross-town isolation and disabled-area preservation. Typecheck
+and production build passed. No schema migration was needed.
+
 Customer browsing and checkout use the explicit production connector, rather
 than the former local-only marketplace gate. Discovery refreshes eligibility
 only for the selected service area (four concurrent checks, one 2.5-second

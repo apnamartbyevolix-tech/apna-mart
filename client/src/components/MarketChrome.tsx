@@ -391,7 +391,7 @@ export function MarketShell({ children }: { children: ReactNode }) {
                     {zone.name && zone.name !== zone.locality
                       ? ` · ${zone.name}`
                       : ""}
-                    {zone.postalCode ? ` · ${zone.postalCode}` : ""}
+                    {zone.postalCode && zone.postalCode !== zone.locality && zone.postalCode !== zone.name ? ` · ${zone.postalCode}` : ""}
                   </option>
                 ))}
               </select>

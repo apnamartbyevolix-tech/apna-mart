@@ -19,12 +19,13 @@ import {
   orders,
   paymentRecords,
   orderItems,
-  towns, serviceZones, categories, users,
+  categories, users,
 } from "../../../drizzle/schema";
 import { SignedSandboxTransport } from "./transport";
 import type { Operation } from "./adapter";
 import { isReviewDemo } from "../../auth/review-demo-context";
 import { prepareCheckout } from "../../marketplace/checkout";
+import { provisionPublishedLocation } from "../../marketplace/published-location";
 
 export { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
 import { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
@@ -233,12 +234,7 @@ export function registerApnaSandbox(app: Express) {
               await tx.execute(sql`UPDATE apna_links SET live=false,version=${b.version},verified_at=now() WHERE merchant_id=${b.merchantId}`);
               return;
             }
-            const townSlug="in-"+createHash("sha256").update(b.shop.state!.toLowerCase()+":"+b.shop.city!.toLowerCase()).digest("hex").slice(0,24);
-            await tx.insert(towns).values({slug:townSlug,name:b.shop.city!,state:b.shop.state!,isDemo:false}).onConflictDoNothing();
-            const [town]=await tx.select().from(towns).where(eq(towns.slug,townSlug)); townId=town.id;
-            const zoneSlug=b.shop.postalCode||townSlug;
-            await tx.insert(serviceZones).values({townId,slug:zoneSlug,name:b.shop.postalCode||b.shop.city!,locality:b.shop.postalCode||b.shop.city!}).onConflictDoNothing();
-            const [zone]=await tx.select().from(serviceZones).where(sql`${serviceZones.townId}=${townId} AND ${serviceZones.slug}=${zoneSlug}`); zoneId=zone.id;
+            ({townId,zoneId}=await provisionPublishedLocation(tx,{city:b.shop.city!,state:b.shop.state!,postalCode:b.shop.postalCode}));
             await tx.insert(categories).values({slug:"local-shops",name:"Local shops"}).onConflictDoNothing();
             const [category]=await tx.select().from(categories).where(eq(categories.slug,"local-shops")); categoryId=category.id;
             const openId="apna-shop-"+b.merchantId;
