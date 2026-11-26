@@ -31,7 +31,7 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export const customerPhoneIdentities=mysqlTable('customer_phone_identities',{
- phone:varchar('phone',{length:16}).primaryKey(),userId:int('user_id').notNull().unique().references(()=>users.id),verifiedAt:datetime('verified_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+ phone:varchar('phone',{length:16}).primaryKey(),userId:int('user_id').notNull().unique().references(()=>users.id),verifiedAt:datetime('verified_at').notNull().default(sql`CURRENT_TIMESTAMP`),pinSalt:char('pin_salt',{length:32}),pinDigest:char('pin_digest',{length:128}),pinAttempts:int('pin_attempts').notNull().default(0),pinLockedUntil:datetime('pin_locked_until'),
 });
 export const customerOtpChallenges=mysqlTable('customer_otp_challenges',{
  id:varchar('id',{length:36}).primaryKey(),phone:varchar('phone',{length:16}).notNull(),digest:char('digest',{length:64}).notNull(),browserHash:char('browser_hash',{length:64}).notNull(),state:varchar('state',{length:12}).notNull(),attempts:int('attempts').notNull().default(0),expiresAt:datetime('expires_at').notNull(),createdAt:datetime('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),

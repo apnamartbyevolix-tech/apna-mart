@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
+
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { ReviewDemoBanner } from "./ReviewDemoSignIn";
@@ -247,7 +247,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
 }
 
 export function LoginButton({
-  children = "Continue with Manus",
+  children = "Sign in",
   className,
 }: {
   children?: ReactNode;
@@ -258,20 +258,7 @@ export function LoginButton({
     <Button
       className={className}
       onClick={() => {
-        if (
-          !window.__MANUS_CONFIG__?.oauthPortalUrl ||
-          !window.__MANUS_CONFIG__?.projectId
-        ) {
-          navigate("/login");
-          return;
-        }
-        try {
-          startLogin();
-        } catch {
-          toast.error(
-            "Manus sign-in is not configured for this environment yet."
-          );
-        }
+        navigate("/login");
       }}
     >
       {children}

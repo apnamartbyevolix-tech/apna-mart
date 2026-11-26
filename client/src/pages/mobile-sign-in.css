@@ -254,3 +254,30 @@
   font-size: 13px;
   margin: 12px 0 18px;
 }
+
+.mobile-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.mobile-auth-tabs button {
+  border: 1px solid #d7e2d0;
+  background: #fff;
+  color: #356043;
+  border-radius: 9px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mobile-auth-tabs button[aria-pressed="true"] {
+  background: #e8f3e8;
+  border-color: #388153;
+  font-weight: 700;
+}
+.mobile-auth-card .mobile-auth-pin-help {
+  font-size: 12px;
+  color: #52684a;
+  line-height: 1.6;
+}

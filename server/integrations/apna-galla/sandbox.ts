@@ -29,6 +29,7 @@ import { provisionPublishedLocation } from "../../marketplace/published-location
 
 export { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
 import { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
+import { publicCatalogueImage } from "./public-media";
 const rows = async (db: any, q: any): Promise<any[]> => {
   const r = await db.execute(q);
   return r.rows as any[];
@@ -80,13 +81,13 @@ async function verify(merchantId: string) {
   return v;
 }
 
-const catalogueSchema = z
+export const catalogueSchema = z
   .object({
     revision: z.enum(["1.2-sandbox", "1.2"]),
     merchantId: z.string().uuid(),
     version: z.number().int().positive(),
     live: z.boolean(),
-    shop: z.object({ name: z.string().trim().min(2).max(100), city:z.string().trim().min(2).max(100).optional(), state:z.string().trim().min(2).max(100).optional(), address:z.string().trim().min(3).max(1000).optional(), postalCode:z.string().regex(/^\d{6}$/).optional(), phone:z.string().max(50).optional() }).strict(),
+    shop: z.object({ imageUrl:z.string().max(350).nullable().optional(), name: z.string().trim().min(2).max(100), city:z.string().trim().min(2).max(100).optional(), state:z.string().trim().min(2).max(100).optional(), address:z.string().trim().min(3).max(1000).optional(), postalCode:z.string().regex(/^\d{6}$/).optional(), phone:z.string().max(50).optional() }).strict(),
     eligibility: z
       .object({
         isValid: z.boolean(),
@@ -100,6 +101,7 @@ const catalogueSchema = z
       .array(
         z
           .object({
+            imageUrl:z.string().max(350).nullable().optional(),
             sku: z.string().min(1).max(100),
             name: z.string().min(1).max(180),
             unit: z.string().min(1).max(48),
@@ -258,6 +260,7 @@ export function registerApnaSandbox(app: Express) {
                 categoryId,
                 slug: "apna-" + b.merchantId,
                 shopName: b.shop.name,
+              ...(b.shop.imageUrl!==undefined?{coverUrl:publicCatalogueImage(b.shop.imageUrl,b.merchantId),logoUrl:publicCatalogueImage(b.shop.imageUrl,b.merchantId)}:{}),
                 address: productionConnector() ? b.shop.address! : "Demo Bazaar · sandbox test location",
                 phone:productionConnector() ? b.shop.phone : undefined,
                 isDemo: !productionConnector(),
@@ -293,6 +296,7 @@ export function registerApnaSandbox(app: Express) {
             let productId = p?.product_id;
             const values = {
               name: i.name,
+              ...(i.imageUrl!==undefined?{imageUrl:publicCatalogueImage(i.imageUrl,b.merchantId)}:{}),
               unit: i.unit,
               pricePaise: i.pricePaise,
               offerMeta:i.offer||null,

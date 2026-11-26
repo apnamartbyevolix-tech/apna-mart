@@ -228,8 +228,8 @@ export function OrdersPage() {
           </span>
           <p className="eyebrow">YOUR APNA MART ACCOUNT</p>
           <h1>Sign in to see your orders.</h1>
-          <p>Use the real Manus sign-in flow.</p>
-          <LoginButton>Continue with Manus</LoginButton>
+          <p>Sign in with your mobile number and PIN.</p>
+          <LoginButton>Sign in</LoginButton>
         </div>
         <OtpNote />
       </div>
@@ -1083,11 +1083,6 @@ export function SignInPage() {
   const { auth } = useMarket();
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
-  const hasManusOAuth = Boolean(
-    typeof window !== "undefined" &&
-      window.__MANUS_CONFIG__?.oauthPortalUrl &&
-      window.__MANUS_CONFIG__?.projectId
-  );
   const isDevEnv = import.meta.env.DEV;
 
   const standaloneLogin = trpc.auth.standaloneLogin.useMutation({
@@ -1138,9 +1133,7 @@ export function SignInPage() {
         ) : (
           <>
             <MobileSignIn />
-            {hasManusOAuth && (
-              <LoginButton>Continue with Manus OAuth</LoginButton>
-            )}
+
 
             {isDevEnv && (
               <div

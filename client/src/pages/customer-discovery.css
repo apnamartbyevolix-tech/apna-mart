@@ -954,7 +954,9 @@
     background: linear-gradient(0deg, #fff 65%, #fff0);
   }
   .customer-dock .mobile-nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
     position: static;
     padding-bottom: 0;
     box-shadow: none;
@@ -964,7 +966,7 @@
   }
   .mobile-nav > a {
     font-size: 9px;
-    min-width: 54px;
+    min-width: 0;
     padding: 8px 3px;
   }
   .mobile-nav svg {
