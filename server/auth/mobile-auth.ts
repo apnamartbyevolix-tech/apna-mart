@@ -1,3 +1,4 @@
+import { reserveSmsBudget } from "./sms-budget";
 import {
   createHash,
   createHmac,
@@ -251,6 +252,7 @@ export async function beginCustomerLogin(
       ))
     )
       return false;
+    if (process.env.MTM_SMS_PROVIDER === 'apitxt' && !(await reserveSmsBudget(tx, mac))) return false;
     await tx.execute(
       sql`UPDATE customer_otp_challenges SET state='REVOKED' WHERE phone=${phone} AND state IN('PENDING','READY')`
     );
