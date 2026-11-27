@@ -1,3 +1,5 @@
+import { loginReturnPath } from "@/lib/login-return";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -6,6 +8,7 @@ import "./mobile-sign-in.css";
 import ReviewDemoSignIn from "@/components/ReviewDemoSignIn";
 
 export default function MobileSignIn() {
+  const { t } = useLanguage();
   const [status, setStatus] = useState<{
     enabled: boolean;
     deliveryMode: string;
@@ -28,7 +31,10 @@ export default function MobileSignIn() {
     [, navigate] = useLocation();
   useEffect(() => {
     let alive = true;
-    fetch("/api/auth/mobile/status", { credentials: "include" })
+    fetch("/api/auth/mobile/status", {
+      credentials: "include",
+      signal: AbortSignal.timeout(10000),
+    })
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(s => {
         if (alive) setStatus(s);
@@ -57,6 +63,7 @@ export default function MobileSignIn() {
       credentials: "include",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
     });
     const result = await r.json();
     if (!r.ok) throw Error(result.message || "Sign-in could not be completed.");
@@ -105,7 +112,7 @@ export default function MobileSignIn() {
         sessionStorage.removeItem("manus-cookie");
       } catch {}
       await utils.invalidate();
-      navigate("/account");
+      navigate(loginReturnPath(window.location.search));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please try again.");
     } finally {
@@ -134,7 +141,7 @@ export default function MobileSignIn() {
   );
   const phoneField = (
     <label>
-      Mobile number
+      {t("Mobile number")}{" "}
       <div className="mobile-auth-phone">
         <span>+91</span>
         <input
@@ -142,7 +149,7 @@ export default function MobileSignIn() {
           type="tel"
           inputMode="tel"
           autoComplete="tel-national"
-          placeholder="Enter mobile number"
+          placeholder={t("Enter mobile number")}
           pattern="[6-9][0-9]{9}"
           maxLength={10}
           value={phone}
@@ -172,14 +179,14 @@ export default function MobileSignIn() {
         <span className="mobile-auth-icon">
           <Smartphone size={25} />
         </span>
-        <div className="mobile-auth-tabs" aria-label="Account access">
+        <div className="mobile-auth-tabs" aria-label={t("Account access")}>
           <button
             type="button"
             aria-pressed={mode !== "create"}
             disabled={busy}
             onClick={() => changeMode("pin")}
           >
-            Sign in
+            {t("Sign in")}{" "}
           </button>
           <button
             type="button"
@@ -187,7 +194,7 @@ export default function MobileSignIn() {
             disabled={busy}
             onClick={() => changeMode("create")}
           >
-            Create account
+            {t("Create account")}{" "}
           </button>
         </div>
         <h2>
@@ -219,7 +226,7 @@ export default function MobileSignIn() {
               className="mobile-auth-primary"
               disabled={busy || phone.length !== 10 || pin.length !== 4}
             >
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? "Signing in…" : t("Sign in")}
               <ArrowRight size={17} />
             </button>
             <div className="mobile-auth-actions">
@@ -228,14 +235,14 @@ export default function MobileSignIn() {
                 disabled={busy}
                 onClick={() => changeMode("reset")}
               >
-                Forgot PIN / set up PIN
+                {t("Forgot PIN / set up PIN")}{" "}
               </button>
             </div>
           </form>
         ) : challenge ? (
           <form onSubmit={signIn}>
             <label>
-              Verification code
+              {t("Verification code")}{" "}
               <input
                 required
                 inputMode="numeric"
@@ -248,7 +255,7 @@ export default function MobileSignIn() {
             </label>
             {mode === "create" && (
               <label>
-                Your name (optional)
+                {t("Your name (optional)")}{" "}
                 <input
                   autoComplete="name"
                   maxLength={80}
@@ -260,7 +267,9 @@ export default function MobileSignIn() {
             {pinField(pin, setPin, "Choose a 4-digit PIN")}
             {pinField(confirm, setConfirm, "Confirm 4-digit PIN")}
             <p className="mobile-auth-pin-help">
-              Keep this PIN private. Resetting it signs out your other devices.
+              {t(
+                "Keep this PIN private. Resetting it signs out your other devices."
+              )}{" "}
             </p>
             <button
               className="mobile-auth-primary"
@@ -289,7 +298,7 @@ export default function MobileSignIn() {
                 }}
               >
                 <ArrowLeft size={13} />
-                Change number
+                {t("Change number")}{" "}
               </button>
               <button
                 type="button"
@@ -328,8 +337,9 @@ export default function MobileSignIn() {
         )}
         <p className="mobile-auth-trust">
           <ShieldCheck size={15} />
-          Your account stays signed in on this device. Sign out on shared
-          devices.
+          {t(
+            "Your account stays signed in on this device. Sign out on shared devices."
+          )}{" "}
         </p>
       </section>
       <ReviewDemoSignIn />

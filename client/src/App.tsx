@@ -5,6 +5,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { MarketProvider, MarketShell } from "./components/MarketChrome";
+import { LanguageProvider } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("./pages/CustomerDiscovery"));
@@ -102,8 +103,10 @@ function Router() {
             <Route path="/favorites" component={FavoritesPage} />
             <Route path="/support" component={SupportPage} />
             <Route path="/account" component={AccountPage} />
-            <Route path="/privacy">{()=> <PrivacyPage />}</Route>
-            <Route path="/account-deletion">{()=> <PrivacyPage deletion />}</Route>
+            <Route path="/privacy">{() => <PrivacyPage />}</Route>
+            <Route path="/account-deletion">
+              {() => <PrivacyPage deletion />}
+            </Route>
             <Route path="/login" component={SignInPage} />
             <Route component={NotFound} />
           </Switch>
@@ -116,12 +119,14 @@ function Router() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider defaultTheme="light">
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </ThemeProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }

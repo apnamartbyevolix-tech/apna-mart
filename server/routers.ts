@@ -1,3 +1,4 @@
+import { browseInput, browseRows } from "./marketplace/browse";
 import {activeOffer,effectiveProduct} from "../shared/offers";
 import {validShopHours,withinShopHours} from '../shared/shop-hours';
 import {logoutMobileRequest} from './auth/mobile-auth';
@@ -1322,6 +1323,33 @@ export const appRouter = router({
       }),
   }),
   marketplace: router({
+    browse: publicProcedure.input(browseInput).query(async ({ ctx, input }) => {
+      requireLocalMarketplace(ctx.req);
+      const db = await database();
+      await refreshLinkedEligibility({
+        townId: input.townId,
+        zoneId: input.zoneId,
+      });
+      await requireActiveServiceZone(db, input.townId, input.zoneId);
+      const page = await browseRows(db, input);
+      const ratings = await shopRatingMap(
+        db,
+        page.shopRows.map(row => row.shop.id)
+      );
+      return {
+        products: page.productRows.map(row => ({
+          ...publicProduct(row.product),
+          shopName: row.shopName,
+        })),
+        shops: page.shopRows.map(row =>
+          withShopRating(
+            publicShop(row.shop, row.zone, row.category, row.townName),
+            ratings
+          )
+        ),
+        nextCursor: page.nextCursor,
+      };
+    }),
     toggleFavorite: protectedProcedure
       .input(z.object({ shopId: z.number().int().positive(), townId: z.number().int().positive(), zoneId: z.number().int().positive(), favorited: z.boolean() }))
       .mutation(async ({ ctx, input }) => {

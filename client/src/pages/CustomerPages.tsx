@@ -1,3 +1,4 @@
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useState } from "react";
 import MobileSignIn from "./MobileSignIn";
 import { Link, useLocation } from "wouter";
@@ -37,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 export { CheckoutPage } from "./CheckoutPage";
 
 export function CartPage() {
+  const { t } = useLanguage();
   const { cart, setQuantity, clearCart, townId, zoneId, locality } =
     useMarket();
   const shopId = cart[0]?.product.shopId;
@@ -57,15 +59,15 @@ export function CartPage() {
     return (
       <div className="page-wrap">
         <Link href="/" className="back-link">
-          <ArrowLeft /> Keep browsing
+          <ArrowLeft /> {t("Keep browsing")}{" "}
         </Link>
-        <EmptyState icon={ShoppingBag} title="Your cart is empty">
+        <EmptyState icon={ShoppingBag} title={t("Your cart is empty")}>
           Browse current marketplace listings and add available products from
           one seller.
         </EmptyState>
         <div className="center-action">
           <Link href="/search" className="primary-link">
-            Explore local shops <ArrowRight />
+            {t("Explore local shops")} <ArrowRight />
           </Link>
         </div>
       </div>
@@ -83,7 +85,7 @@ export function CartPage() {
       </Link>
       <div className="page-intro">
         <p className="eyebrow">ONE LOCAL SELLER PER ORDER</p>
-        <h1>Your cart</h1>
+        <h1>{t("Your cart")}</h1>
         <p>
           Items and availability are revalidated by the server when the order is
           placed.
@@ -101,7 +103,7 @@ export function CartPage() {
               clear this cart. Your items have not been replaced.
             </p>
             <Button variant="outline" onClick={clearCart}>
-              Clear cart
+              {t("Clear cart")}{" "}
             </Button>
           </div>
         </div>
@@ -120,7 +122,7 @@ export function CartPage() {
               </small>
             </div>
             <Link href={`/shop/${shopId}`} className="text-link">
-              Shop page <ArrowRight />
+              {t("Shop page")} <ArrowRight />
             </Link>
           </div>
           {cart.map(({ product, quantity }) => (
@@ -136,14 +138,14 @@ export function CartPage() {
               <div className="cart-line-actions">
                 <div className="quantity-control compact">
                   <button
-                    aria-label="Remove one"
+                    aria-label={t("Remove one")}
                     onClick={() => setQuantity(product.id, quantity - 1)}
                   >
                     <Minus />
                   </button>
                   <strong>{quantity}</strong>
                   <button
-                    aria-label="Add one"
+                    aria-label={t("Add one")}
                     disabled={quantity >= 100}
                     onClick={() => setQuantity(product.id, quantity + 1)}
                   >
@@ -154,7 +156,7 @@ export function CartPage() {
                   className="remove-link"
                   onClick={() => setQuantity(product.id, 0)}
                 >
-                  <Trash2 /> Remove
+                  <Trash2 /> {t("Remove")}{" "}
                 </button>
               </div>
             </article>
@@ -165,13 +167,13 @@ export function CartPage() {
           </div>
         </section>
         <aside className="cart-summary">
-          <h2>Estimate</h2>
+          <h2>{t("Estimate")}</h2>
           <div>
-            <span>Items subtotal</span>
+            <span>{t("Items subtotal")}</span>
             <strong>{formatINR(subtotal)}</strong>
           </div>
           <div>
-            <span>Delivery (if selected)</span>
+            <span>{t("Delivery (if selected)")}</span>
             <strong>
               {shop?.deliveryEnabled
                 ? formatINR(shop?.deliveryFeePaise ?? 0)
@@ -187,7 +189,7 @@ export function CartPage() {
             disabled={!shop || !townId || !zoneId}
             onClick={() => window.location.assign("/checkout")}
           >
-            Continue to checkout <ArrowRight />
+            {t("Continue to checkout")} <ArrowRight />
           </Button>
         </aside>
       </div>
@@ -196,6 +198,7 @@ export function CartPage() {
 }
 
 export function OrdersPage() {
+  const { t } = useLanguage();
   const { auth } = useMarket();
   const query = trpc.marketplace.myOrders.useQuery(undefined, {
     enabled: Boolean(auth.user),
@@ -216,7 +219,7 @@ export function OrdersPage() {
         <EmptyState icon={CircleHelp} title="Couldn't check your account">
           Please try again. Orders stay private to the signed-in customer.
         </EmptyState>
-        <Button onClick={() => auth.refresh()}>Try again</Button>
+        <Button onClick={() => auth.refresh()}>{t("Try again")}</Button>
       </div>
     );
   if (!auth.user)
@@ -229,7 +232,7 @@ export function OrdersPage() {
           <p className="eyebrow">YOUR APNA MART ACCOUNT</p>
           <h1>Sign in to see your orders.</h1>
           <p>Sign in with your mobile number and PIN.</p>
-          <LoginButton>Sign in</LoginButton>
+          <LoginButton>{t("Sign in")}</LoginButton>
         </div>
         <OtpNote />
       </div>
@@ -238,8 +241,8 @@ export function OrdersPage() {
     <div className="page-wrap">
       <div className="page-intro">
         <p className="eyebrow">YOUR LOCAL SHOPPING</p>
-        <h1>Orders</h1>
-        <p>Live order history from your signed-in account.</p>
+        <h1>{t("Orders")}</h1>
+        <p>Track your orders and view past purchases.</p>
       </div>
       <QueryState loading={query.isLoading} error={query.error}>
         {query.data &&
@@ -263,7 +266,7 @@ export function OrdersPage() {
               ))}
             </div>
           ) : (
-            <EmptyState icon={ShoppingBag} title="No orders yet">
+            <EmptyState icon={ShoppingBag} title={t("No orders yet")}>
               Your submitted marketplace orders will appear here.
             </EmptyState>
           ))}
@@ -277,6 +280,7 @@ export function OrdersPage() {
 }
 
 export function OrderDetailPage({ id }: { id: string }) {
+  const { t } = useLanguage();
   const { auth, replaceCart, townId, zoneId, locality } = useMarket();
   const [, navigate] = useLocation();
   const orderId = Number(id);
@@ -400,7 +404,7 @@ export function OrderDetailPage({ id }: { id: string }) {
     return (
       <div className="page-wrap">
         <Link href="/orders" className="back-link">
-          <ArrowLeft /> Order history
+          <ArrowLeft /> {t("Order history")}{" "}
         </Link>
         <div className="account-hero">
           <h1>Sign in to view this order.</h1>
@@ -419,7 +423,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   return (
     <div className="page-wrap">
       <Link href="/orders" className="back-link">
-        <ArrowLeft /> Order history
+        <ArrowLeft /> {t("Order history")}{" "}
       </Link>
       <QueryState loading={q.isLoading} error={q.error}>
         {data && (
@@ -447,14 +451,14 @@ export function OrderDetailPage({ id }: { id: string }) {
               <p>
                 {new Date(data.order.createdAt).toLocaleString()} ·{" "}
                 {data.order.fulfillmentType === "delivery"
-                  ? "Delivery"
+                  ? t("Delivery")
                   : "Pickup"}{" "}
                 · payment {data.order.paymentStatus}
               </p>
             </div>
             {handoverEligible && (
               <section className="workspace-panel" aria-live="polite">
-                <h2>Your handover code</h2>
+                <h2>{t("Your handover code")}</h2>
                 {data.handoverCode ? (
                   <>
                     <p
@@ -468,12 +472,12 @@ export function OrderDetailPage({ id }: { id: string }) {
                       {data.handoverCode}
                     </p>
                     <p>
-                      Show this 8-digit code to{" "}
+                      {t("Show this 8-digit code to")}{" "}
                       {data.order.fulfillmentType === "pickup"
                         ? "the shop when collecting your order"
                         : "the seller or rider when your order arrives"}
                       . This code is visible only in your signed-in order.{" "}
-                      <strong>No SMS is sent.</strong>
+                      <strong>{t("No SMS is sent.")}</strong>
                     </p>
                   </>
                 ) : (
@@ -486,7 +490,7 @@ export function OrderDetailPage({ id }: { id: string }) {
               </section>
             )}
             <section className="workspace-panel">
-              <h2>Items</h2>
+              <h2>{t("Items")}</h2>
               {data.items.map(item => (
                 <div className="checkout-item" key={item.id}>
                   <span>
@@ -498,24 +502,24 @@ export function OrderDetailPage({ id }: { id: string }) {
               ))}
               <div className="summary-divider" />
               <div>
-                <span>Subtotal</span>
+                <span>{t("Subtotal")}</span>
                 <strong>{formatINR(data.order.subtotalPaise)}</strong>
               </div>
               <div>
-                <span>Delivery fee</span>
+                <span>{t("Delivery fee")}</span>
                 <strong>{formatINR(data.order.deliveryFeePaise)}</strong>
               </div>
               <div>
-                <span>Platform fee</span>
+                <span>{t("Platform fee")}</span>
                 <strong>{formatINR(data.order.platformFeePaise)}</strong>
               </div>
               <div className="summary-total">
-                <span>Total</span>
+                <span>{t("Total")}</span>
                 <strong>{formatINR(data.order.totalPaise)}</strong>
               </div>
             </section>
             <section className="workspace-panel">
-              <h2>Order status timeline</h2>
+              <h2>{t("Order status timeline")}</h2>
               <div className="order-timeline">
                 {data.timeline.map(event => (
                   <div className="timeline-step" key={event.id}>
@@ -535,7 +539,7 @@ export function OrderDetailPage({ id }: { id: string }) {
             </section>
             {data.order.status === "delivered" && (
               <section className="workspace-panel">
-                <h2>Review this shop</h2>
+                <h2>{t("Review this shop")}</h2>
                 {data.review ? (
                   <p>
                     Your review: {data.review.rating}/5
@@ -556,7 +560,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                     }}
                   >
                     <label>
-                      Rating
+                      {t("Rating")}{" "}
                       <select
                         value={rating}
                         onChange={event =>
@@ -565,13 +569,13 @@ export function OrderDetailPage({ id }: { id: string }) {
                       >
                         {[5, 4, 3, 2, 1].map(value => (
                           <option key={value} value={value}>
-                            {value} out of 5
+                            {value} {t("out of 5")}{" "}
                           </option>
                         ))}
                       </select>
                     </label>
                     <label>
-                      Comment (optional)
+                      {t("Comment (optional)")}{" "}
                       <textarea
                         maxLength={2000}
                         rows={3}
@@ -597,10 +601,10 @@ export function OrderDetailPage({ id }: { id: string }) {
             )}
             {["placed", "accepted"].includes(data.order.status) && (
               <section className="workspace-panel">
-                <h2>Cancel order</h2>
+                <h2>{t("Cancel order")}</h2>
                 <p>You can cancel while the order is placed or accepted.</p>
                 <label className="field-label">
-                  Optional reason
+                  {t("Optional reason")}{" "}
                   <input
                     value={reason}
                     maxLength={1000}
@@ -618,13 +622,13 @@ export function OrderDetailPage({ id }: { id: string }) {
                       });
                   }}
                 >
-                  {cancel.isPending ? "Cancelling…" : "Cancel order"}
+                  {cancel.isPending ? "Cancelling…" : t("Cancel order")}
                 </Button>
                 {cancel.error && <p role="alert">{cancel.error.message}</p>}
               </section>
             )}
             <section className="workspace-panel">
-              <h2>Shop from this order again</h2>
+              <h2>{t("Shop from this order again")}</h2>
               <p>
                 Buy again uses the shop's current listing, price and
                 availability in your selected location; old order snapshots are
@@ -662,6 +666,7 @@ export function OrderDetailPage({ id }: { id: string }) {
 }
 
 export function AccountPage() {
+  const { t } = useLanguage();
   const { auth, areas, areasLoading } = useMarket();
   const utils = trpc.useUtils();
   const profileQ = trpc.account.profile.useQuery(undefined, {
@@ -734,16 +739,17 @@ export function AccountPage() {
           <p className="eyebrow">ACCOUNT & PRIVACY</p>
           <h1>Your account, your neighbourhood.</h1>
           <p>Sign in with your mobile number to manage your account.</p>
-          <LoginButton>Sign in securely</LoginButton>
+          <LoginButton>{t("Sign in securely")}</LoginButton>
         </div>
         <div className="account-links">
           <Link href="/orders">
-            <ShoppingBag /> Order history <ArrowRight />
+            <ShoppingBag /> {t("Order history")} <ArrowRight />
           </Link>
         </div>
         <OtpNote />
-        <IntegrationNote title="Privacy">
-          Read our privacy information or request account deletion from the links below.
+        <IntegrationNote title={t("Privacy")}>
+          Read our privacy information or request account deletion from the
+          links below.
         </IntegrationNote>
       </div>
     );
@@ -757,32 +763,32 @@ export function AccountPage() {
       </div>
       <div className="account-links">
         <Link href="/orders">
-          <ShoppingBag /> Order history <ArrowRight />
+          <ShoppingBag /> {t("Order history")} <ArrowRight />
         </Link>
         <Link href="/favorites">
-          <Heart /> Favourite shops <ArrowRight />
+          <Heart /> {t("Favourite shops")} <ArrowRight />
         </Link>
         <Link href="/support">
-          <MessageSquareText /> Help & support <ArrowRight />
+          <MessageSquareText /> {t("Help & support")} <ArrowRight />
         </Link>
       </div>
       <section className="workspace-panel">
-        <h2>Profile</h2>
+        <h2>{t("Profile")}</h2>
         {identityQ.data?.verifiedMobile && (
           <p className="verified-mobile">
             <ShieldCheck size={15} />
-            Verified sign-in number:{" "}
+            {t("Verified sign-in number:")}{" "}
             <strong>{identityQ.data.verifiedMobile}</strong>
           </p>
         )}
         <label className="field-label">
-          Contact phone
+          {t("Contact phone")}{" "}
           <input
             type="tel"
             maxLength={30}
             value={phone}
             onChange={event => setPhone(event.target.value)}
-            placeholder="Optional phone number"
+            placeholder={t("Optional phone number")}
           />
         </label>
         <Button
@@ -800,7 +806,7 @@ export function AccountPage() {
       <section className="workspace-panel">
         <div className="panel-heading">
           <div>
-            <h2>Saved addresses</h2>
+            <h2>{t("Saved addresses")}</h2>
             <p>
               Address ownership and service-area matching are checked by the
               backend.
@@ -813,7 +819,7 @@ export function AccountPage() {
               setRecipientName(auth.user?.name || "");
             }}
           >
-            Add address
+            {t("Add address")}{" "}
           </Button>
         </div>
         <QueryState loading={addressesQ.isLoading} error={addressesQ.error}>
@@ -849,13 +855,13 @@ export function AccountPage() {
                       setIsDefault(address.isDefault);
                     }}
                   >
-                    Edit
+                    {t("Edit")}{" "}
                   </Button>
                 </article>
               ))}
             </div>
           ) : (
-            <EmptyState icon={MapPin} title="No saved addresses">
+            <EmptyState icon={MapPin} title={t("No saved addresses")}>
               Add a valid address to use delivery checkout. Pickup does not
               require an address.
             </EmptyState>
@@ -881,7 +887,7 @@ export function AccountPage() {
           >
             <h3>{editing ? "Edit address" : "New address"}</h3>
             <label>
-              Label
+              {t("Label")}{" "}
               <input
                 required
                 maxLength={40}
@@ -890,7 +896,7 @@ export function AccountPage() {
               />
             </label>
             <label>
-              Recipient name
+              {t("Recipient name")}{" "}
               <input
                 required
                 maxLength={160}
@@ -899,7 +905,7 @@ export function AccountPage() {
               />
             </label>
             <label>
-              Phone
+              {t("Phone")}{" "}
               <input
                 required
                 type="tel"
@@ -910,7 +916,7 @@ export function AccountPage() {
               />
             </label>
             <label>
-              Address line 1
+              {t("Address line 1")}{" "}
               <input
                 required
                 minLength={2}
@@ -920,7 +926,7 @@ export function AccountPage() {
               />
             </label>
             <label>
-              Address line 2
+              {t("Address line 2")}{" "}
               <input
                 maxLength={240}
                 value={line2}
@@ -928,7 +934,7 @@ export function AccountPage() {
               />
             </label>
             <label>
-              Town
+              {t("Town")}{" "}
               <select
                 required
                 value={townId}
@@ -937,7 +943,7 @@ export function AccountPage() {
                   setZoneId("");
                 }}
               >
-                <option value="">Choose active town</option>
+                <option value="">{t("Choose active town")}</option>
                 {towns.map(town => (
                   <option key={town.id} value={town.id}>
                     {town.name}, {town.state}
@@ -946,7 +952,7 @@ export function AccountPage() {
               </select>
             </label>
             <label>
-              Service zone
+              {t("Service zone")}{" "}
               <select
                 required
                 value={zoneId}
@@ -991,7 +997,7 @@ export function AccountPage() {
                 checked={isDefault}
                 onChange={event => setIsDefault(event.target.checked)}
               />
-              Set as default
+              {t("Set as default")}{" "}
             </label>
             <Button
               type="submit"
@@ -1006,7 +1012,7 @@ export function AccountPage() {
               variant="outline"
               onClick={() => setEditing(null)}
             >
-              Close
+              {t("Close")}{" "}
             </Button>
             {saveAddress.error && (
               <p role="alert">{saveAddress.error.message}</p>
@@ -1014,16 +1020,18 @@ export function AccountPage() {
           </form>
         )}
       </section>
-      <IntegrationNote title="Privacy & account">
-        <Link href="/privacy">Privacy information</Link> · <Link href="/account-deletion">Request account deletion</Link>
+      <IntegrationNote title={t("Privacy & account")}>
+        <Link href="/privacy">{t("Privacy information")}</Link> ·{" "}
+        <Link href="/account-deletion">{t("Request account deletion")}</Link>
       </IntegrationNote>
       <Button variant="outline" onClick={() => auth.logout()}>
-        Sign out
+        {t("Sign out")}{" "}
       </Button>
     </div>
   );
 }
 export function FavoritesPage() {
+  const { t } = useLanguage();
   const { auth, townId, zoneId, areasLoading } = useMarket();
   const query = trpc.marketplace.favoriteShops.useQuery(
     { townId: townId ?? -1, zoneId: zoneId ?? -1 },
@@ -1045,7 +1053,7 @@ export function FavoritesPage() {
           <p className="eyebrow">YOUR LOCAL FAVOURITES</p>
           <h1>Sign in to see saved shops.</h1>
           <p>Saved shops are private to your signed-in account.</p>
-          <LoginButton>Sign in securely</LoginButton>
+          <LoginButton>{t("Sign in securely")}</LoginButton>
         </div>
       </div>
     );
@@ -1053,14 +1061,14 @@ export function FavoritesPage() {
     <div className="page-wrap">
       <div className="page-intro">
         <p className="eyebrow">LOCAL FAVOURITES</p>
-        <h1>Shops you have saved</h1>
+        <h1>{t("Shops you have saved")}</h1>
         <p>
           Only approved, open shops in your selected service zone are shown.
         </p>
       </div>
       <QueryState loading={areasLoading || query.isLoading} error={query.error}>
         {!zoneId ? (
-          <EmptyState icon={Heart} title="Choose a service area">
+          <EmptyState icon={Heart} title={t("Choose a service area")}>
             Select a town and locality above to see the saved shops serving you.
           </EmptyState>
         ) : query.data?.length ? (
@@ -1070,7 +1078,7 @@ export function FavoritesPage() {
             ))}
           </div>
         ) : query.data ? (
-          <EmptyState icon={Heart} title="No saved shops yet">
+          <EmptyState icon={Heart} title={t("No saved shops yet")}>
             Open a local shop and choose “Save this shop” to keep it here.
           </EmptyState>
         ) : null}
@@ -1080,6 +1088,7 @@ export function FavoritesPage() {
 }
 
 export function SignInPage() {
+  const { t } = useLanguage();
   const { auth } = useMarket();
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
@@ -1124,16 +1133,15 @@ export function SignInPage() {
             style={{ justifyContent: "center", marginTop: "1rem" }}
           >
             <Link href="/account" className="primary-link">
-              Go to Account <ArrowRight />
+              {t("Go to Account")} <ArrowRight />
             </Link>
             <Button variant="outline" onClick={() => auth.logout()}>
-              Sign out
+              {t("Sign out")}{" "}
             </Button>
           </div>
         ) : (
           <>
             <MobileSignIn />
-
 
             {isDevEnv && (
               <div
@@ -1223,28 +1231,30 @@ export function SignInPage() {
           </>
         )}
         <Link href="/" className="text-link">
-          Back to shopping <ArrowRight />
+          {t("Back to shopping")} <ArrowRight />
         </Link>
       </div>
     </div>
   );
 }
 function OtpNote() {
+  const { t } = useLanguage();
   return (
-    <IntegrationNote title="Keep your handover code private">
+    <IntegrationNote title={t("Keep your handover code private")}>
       Your sign-in OTP is separate from the handover code shown in your order.
       Give the handover code to the shop only when you collect your items.
     </IntegrationNote>
   );
 }
 function NotFoundOrder() {
+  const { t } = useLanguage();
   return (
     <div className="page-wrap">
-      <EmptyState icon={CircleHelp} title="Order not found">
+      <EmptyState icon={CircleHelp} title={t("Order not found")}>
         Check the link or return to your order history.
       </EmptyState>
       <Link href="/orders" className="text-link">
-        Order history <ArrowRight />
+        {t("Order history")} <ArrowRight />
       </Link>
     </div>
   );

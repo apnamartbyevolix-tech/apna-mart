@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { COOKIE_NAME, UNAUTHED_ERR_MSG } from '@shared/const';
+import { COOKIE_NAME, UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -7,8 +7,14 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 import "./accessible-theme.css";
+import "./mart-theme.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false, staleTime: 15000, refetchOnWindowFocus: false },
+    mutations: { retry: false },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -18,7 +24,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  window.location.assign("/login");
+  window.location.assign(
+    "/login?returnTo=" +
+      encodeURIComponent(window.location.pathname + window.location.search)
+  );
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -41,6 +50,7 @@ const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
+      maxItems: 10,
       transformer: superjson,
       headers() {
         // Preview auto-login fallback: when the browser blocks iframe cookies

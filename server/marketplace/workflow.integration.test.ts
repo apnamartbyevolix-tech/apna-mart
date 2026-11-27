@@ -170,6 +170,66 @@ const workflow = describe.skipIf(!integrationEnabled)(
       expect(product.stockQuantity).toBe(stock);
     }
 
+    it("pages the complete public catalogue without duplicates and preserves area/category boundaries", async () => {
+      const fixture = await catalogFixture();
+      await db.insert(products).values(
+        Array.from({ length: 57 }, (_, index) => ({
+          vendorId: fixture.shopId,
+          categoryId: fixture.productCategory,
+          slug: `page-${randomUUID()}`,
+          name: `Pagination product ${index}`,
+          unit: "piece",
+          pricePaise: 1000 + (index % 4) * 100,
+          stockQuantity: index === 56 ? 0 : 2,
+          availability: "available" as const,
+          isDemo: true,
+        }))
+      );
+      const api = caller(null).marketplace;
+      let cursor: { id: number; price: number } | undefined;
+      const ids: number[] = [],
+        prices: number[] = [];
+      for (let page = 0; page < 5; page++) {
+        const result = await api.browse({
+          ...fixture.scope,
+          kind: "products",
+          sort: "low",
+          limit: 24,
+          cursor,
+        });
+        expect(result.products.length).toBeLessThanOrEqual(24);
+        ids.push(...result.products.map(product => product.id));
+        prices.push(...result.products.map(product => product.pricePaise));
+        if (!result.nextCursor) break;
+        cursor = result.nextCursor;
+      }
+      expect(ids).toHaveLength(57);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(prices).toEqual([...prices].sort((a, b) => a - b));
+      const all = await api.browse({
+        ...fixture.scope,
+        kind: "products",
+        onlyStock: false,
+        limit: 50,
+      });
+      expect(all.products).toHaveLength(50);
+      expect(all.nextCursor).not.toBeNull();
+      const foreign = await api.browse({
+        townId,
+        zoneId: otherZoneId,
+        shopId: fixture.shopId,
+      });
+      expect(foreign.products).toEqual([]);
+      await db
+        .update(vendorProfiles)
+        .set({ isOpen: false })
+        .where(eq(vendorProfiles.id, fixture.shopId));
+      expect((await api.browse({ ...fixture.scope })).products).toEqual([]);
+      await expect(
+        api.browse({ ...fixture.scope, limit: 5000 })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    });
+
     beforeAll(async () => {
       if (!integrationEnabled) return;
       const connected = await getDb();

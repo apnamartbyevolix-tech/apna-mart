@@ -1,3 +1,4 @@
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
 import {
@@ -85,15 +86,16 @@ function Header({
   subtitle?: string;
   href?: string;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="discover-section-heading">
       <div>
-        <h2>{title}</h2>
-        {subtitle && <p>{subtitle}</p>}
+        <h2>{t(title)}</h2>
+        {subtitle && <p>{t(subtitle)}</p>}
       </div>
       {href && (
         <Link href={href}>
-          See all <ArrowRight size={15} />
+          {t("See all")} <ArrowRight size={15} />
         </Link>
       )}
     </div>
@@ -106,7 +108,8 @@ function useDiscovery() {
     {
       enabled: !!(area.townId && area.zoneId),
       staleTime: 10000,
-      refetchInterval: 30000,
+      refetchInterval: false,
+      retry: false,
       refetchIntervalInBackground: false,
     }
   );
@@ -145,6 +148,7 @@ function ProductShelf({ products }: { products: MarketProduct[] }) {
 }
 
 export default function CustomerHome() {
+  const { t } = useLanguage();
   const d = useDiscovery();
   const offers = d.products.filter(p => p.offer && p.inStock),
     festival = offers.find(p => p.offer?.festival)?.offer?.festival;
@@ -156,65 +160,32 @@ export default function CustomerHome() {
             <MapPin size={13} />
             {d.locality || "YOUR NEIGHBOURHOOD, ONLINE"}
           </span>
-          <h1>
-            {festival ? (
-              <>
-                {festival} finds.
-                <br />
-                <em>Local little delights.</em>
-              </>
-            ) : (
-              <>
-                Your town.
-                <br />
-                <em>In your pocket.</em>
-              </>
-            )}
-          </h1>
-          <p>
-            {offers.length
-              ? "Fresh offers from the shops you know."
-              : "Everyday essentials, familiar shops and prices you know."}
-          </p>
+          <h1>{t("Good finds. Close to home.")}</h1>
+          <p>{t("Offers from your local shops")}</p>
           <Link
             className="discover-hero-button"
             href={offers.length ? "/offers" : "/categories"}
           >
-            {offers.length ? "Explore local offers" : "Find what you need"}
+            {offers.length ? t("Explore offers") : t("Explore categories")}
             <ArrowRight size={16} />
           </Link>
         </div>
-        <div className="grocery-illustration" aria-hidden="true">
-          <span className="grocery-sun" />
-          <span className="grocery-bag">
-            <ShoppingBag />
-            <b>
-              my
-              <br />
-              town.
-            </b>
-          </span>
-          <span className="grocery-apple">
-            <Apple />
-          </span>
-          <span className="grocery-milk">
-            <Milk />
-          </span>
-          <span className="grocery-leaf">✦</span>
+        <div className="mart-hero-art" aria-hidden="true">
+          <Store />
         </div>
       </section>
       <div className="discover-promises">
         <span>
           <Store size={14} />
-          Your local shops
+          {t("Your local shops")}{" "}
         </span>
         <span>
           <BadgePercent size={14} />
-          Shop prices & offers
+          {t("Shop prices & offers")}{" "}
         </span>
         <span>
           <Package size={14} />
-          Delivery or pickup
+          {t("Delivery or pickup")}{" "}
         </span>
       </div>
       {!d.zoneId ? (
@@ -223,34 +194,22 @@ export default function CustomerHome() {
         <QueryState loading={d.q.isLoading} error={d.q.error}>
           <section>
             <Header
-              title="What’s on your list?"
-              subtitle="Find it by category"
+              title={t("What’s on your list?")}
+              subtitle={t("Find it by category")}
               href="/categories"
             />
             <CategoryTiles categories={d.q.data?.categories || []} />
           </section>
-          <section>
-            <Header
-              title="Today’s offers"
-              subtitle="Real savings from shops around you"
-              href="/offers"
-            />
-            {offers.length ? (
+          {offers.length > 0 && (
+            <section>
+              <Header
+                title={t("Today’s offers")}
+                subtitle={t("Real savings from shops around you")}
+                href="/offers"
+              />
               <ProductShelf products={offers.slice(0, 8)} />
-            ) : (
-              <Link href="/search" className="offer-empty">
-                <BadgePercent />
-                <span>
-                  <strong>Good finds are just around the corner</strong>
-                  <small>
-                    Browse your local shops. New offers will appear here when
-                    they go live.
-                  </small>
-                </span>
-                <ArrowRight />
-              </Link>
-            )}
-          </section>
+            </section>
+          )}
           {festival && (
             <Link
               href={"/offers?festival=" + encodeURIComponent(festival)}
@@ -269,8 +228,8 @@ export default function CustomerHome() {
           )}
           <section>
             <Header
-              title="Everyday, sorted."
-              subtitle="Products available in your selected area"
+              title={t("Everyday, sorted.")}
+              subtitle={t("Products available in your selected area")}
               href="/search"
             />
             <ProductShelf
@@ -279,8 +238,8 @@ export default function CustomerHome() {
           </section>
           <section>
             <Header
-              title="The shops you know"
-              subtitle="A whole neighbourhood, one place"
+              title={t("The shops you know")}
+              subtitle={t("A whole neighbourhood, one place")}
               href="/search?view=shops"
             />
             <div className="discover-shop-list">
@@ -295,7 +254,9 @@ export default function CustomerHome() {
                       {s.categoryLabel} · {s.locality}
                     </small>
                     <span>
-                      {s.pickupEnabled ? "Pickup available" : "Local delivery"}
+                      {s.pickupEnabled
+                        ? t("Pickup available")
+                        : "Local delivery"}
                       {s.deliveryEnabled ? " · Delivery available" : ""}
                     </span>
                   </div>
@@ -329,6 +290,7 @@ export function CategoriesPage() {
   );
 }
 export function OffersPage() {
+  const { t } = useLanguage();
   const d = useDiscovery(),
     params = new URLSearchParams(useSearch()),
     [selected, setSelected] = useState(params.get("festival") || "All"),
@@ -365,7 +327,7 @@ export function OffersPage() {
               key={f}
               onClick={() => setSelected(f)}
             >
-              {f === "All" ? "All offers" : f}
+              {f === "All" ? t("All offers") : f}
             </button>
           ))}
         </div>
@@ -376,8 +338,8 @@ export function OffersPage() {
             value={sort}
             onChange={e => setSort(e.target.value)}
           >
-            <option value="saving">Highest saving %</option>
-            <option value="price">Price: low to high</option>
+            <option value="saving">{t("Highest saving %")}</option>
+            <option value="price">{t("Price: low to high")}</option>
           </select>
         </label>
       </div>
@@ -399,6 +361,7 @@ export function OffersPage() {
   );
 }
 export function CustomerSearchPage() {
+  const { t } = useLanguage();
   const area = useMarket(),
     search = useSearch(),
     params = new URLSearchParams(search),
@@ -408,29 +371,27 @@ export function CustomerSearchPage() {
     [kind, setKind] = useState(
       params.get("view") === "shops" ? "shops" : "products"
     );
-  const q = trpc.marketplace.search.useQuery(
+  const q = trpc.marketplace.browse.useInfiniteQuery(
     {
       q: text || undefined,
       townId: area.townId || -1,
       zoneId: area.zoneId || -1,
+      kind: kind === "shops" ? "shops" : "products",
+      onlyStock,
+      sort: sort === "low" || sort === "high" ? sort : "relevant",
     },
-    { enabled: !!(area.townId && area.zoneId), staleTime: 5000 }
+    {
+      enabled: !!(area.townId && area.zoneId),
+      retry: false,
+      getNextPageParam: page => page.nextCursor ?? undefined,
+    }
   );
-  const shops = (q.data?.shops || []).map(toMarketShop);
-  const products = (q.data?.products || [])
-    .map(p => ({
-      ...toMarketProduct(p),
-      shopName:
-        (p as any).shopName || shops.find(s => s.id === p.vendorId)?.name,
-    }))
-    .filter(p => !onlyStock || p.inStock)
-    .sort((a, b) =>
-      sort === "low"
-        ? a.pricePaise - b.pricePaise
-        : sort === "high"
-          ? b.pricePaise - a.pricePaise
-          : 0
-    );
+  const shops = (q.data?.pages.flatMap(page => page.shops) || []).map(
+    toMarketShop
+  );
+  const products = (q.data?.pages.flatMap(page => page.products) || []).map(
+    product => ({ ...toMarketProduct(product), shopName: product.shopName })
+  );
   return (
     <div className="discovery-page">
       <div className="discover-page-title">
@@ -447,13 +408,13 @@ export function CustomerSearchPage() {
             className={kind === "products" ? "selected" : ""}
             onClick={() => setKind("products")}
           >
-            Products
+            {t("Products")}{" "}
           </button>
           <button
             className={kind === "shops" ? "selected" : ""}
             onClick={() => setKind("shops")}
           >
-            Shops
+            {t("Shops")}{" "}
           </button>
         </div>
         <select
@@ -461,9 +422,9 @@ export function CustomerSearchPage() {
           value={sort}
           onChange={e => setSort(e.target.value)}
         >
-          <option value="relevant">Relevance</option>
-          <option value="low">Price: low to high</option>
-          <option value="high">Price: high to low</option>
+          <option value="relevant">{t("Relevance")}</option>
+          <option value="low">{t("Price: low to high")}</option>
+          <option value="high">{t("Price: high to low")}</option>
         </select>
       </div>
       <label className="discover-stock-filter">
@@ -472,7 +433,7 @@ export function CustomerSearchPage() {
           checked={onlyStock}
           onChange={e => setOnlyStock(e.target.checked)}
         />
-        In stock only
+        {t("In stock only")}{" "}
       </label>
       {!area.zoneId ? (
         <ChooseArea />
@@ -492,6 +453,20 @@ export function CustomerSearchPage() {
                 <ShopCard key={s.id} shop={s} />
               ))}
             </div>
+          )}
+          {q.hasNextPage && (
+            <button
+              className="mart-load-more"
+              disabled={q.isFetchingNextPage}
+              onClick={() => void q.fetchNextPage()}
+            >
+              {t(q.isFetchingNextPage ? "Loading…" : "Load more")}
+            </button>
+          )}
+          {q.isFetchNextPageError && (
+            <p role="status">
+              {t("Could not load more items. Please try again.")}
+            </p>
           )}
         </QueryState>
       )}

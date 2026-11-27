@@ -1,4 +1,6 @@
+import { registerHealth } from "../marketplace/health";
 import "dotenv/config";
+import { registerLocation } from "../marketplace/location";
 import { registerMobileAuth } from "../auth/mobile-auth";
 import { registerReviewDemo } from "../auth/review-demo";
 import { registerApnaVendor } from "../integrations/apna-galla/vendor-http";
@@ -79,19 +81,23 @@ async function startServer() {
   const app = express();
   app.disable("x-powered-by");
   // Render's edge is the single trusted hop. DNS-only custom domains reach it directly.
-  if(process.env.RENDER==="true") app.set("trust proxy",1);
+  if (process.env.RENDER === "true") app.set("trust proxy", 1);
   const server = createServer(app);
+  server.requestTimeout = 15000;
+  server.headersTimeout = 10000;
+  server.keepAliveTimeout = 5000;
+  registerLocation(app);
   registerReviewDemo(app);
   registerMobileAuth(app);
   registerApnaVendor(app);
   registerApnaSandbox(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/api/health", async (_req, res) => {
-    res.set("Cache-Control","no-store");
-    try { const db=await getDb(); if(!db)throw Error("Database unavailable"); await db.execute(sql`SELECT 1`); res.json({status:"ok"}); }
-    catch {res.status(503).json({status:"unavailable"});}
+  // Preserve the existing 2 MB image uploads without permitting arbitrary 50 MB requests.
+  app.use(express.json({ limit: "3mb" }));
+  app.use(express.urlencoded({ limit: "64kb", extended: false }));
+  registerHealth(app, async () => {
+    const db = await getDb();
+    if (!db) throw Error("Database unavailable");
+    await db.execute(sql`SELECT 1`);
   });
   app.get("/api/platform/config.js", (_req, res) => {
     res
@@ -105,6 +111,7 @@ async function startServer() {
     "/api/trpc",
     createExpressMiddleware({
       router: appRouter,
+      maxBatchSize: 10,
       createContext,
     })
   );

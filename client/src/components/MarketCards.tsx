@@ -1,3 +1,4 @@
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import {
@@ -34,15 +35,16 @@ export function SectionHeading({
   href?: string;
   action?: string;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="section-heading">
       <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h2>{title}</h2>
+        {eyebrow && <p className="eyebrow">{t(eyebrow)}</p>}
+        <h2>{t(title)}</h2>
       </div>
       {href && (
         <Link href={href} className="text-link">
-          {action}
+          {t(action)}
           <ArrowRight className="size-4" />
         </Link>
       )}
@@ -56,6 +58,7 @@ export function ProductCard({
   product: MarketProduct;
   shopName?: string;
 }) {
+  const { t } = useLanguage();
   const { addToCart, cart, setQuantity } = useMarket();
   const quantity = cart.find(l => l.product.id === product.id)?.quantity || 0;
   const Artwork = /rice|atta|flour/i.test(product.name)
@@ -100,7 +103,7 @@ export function ProductCard({
           {product.name}
         </Link>
         <p className="product-unit">
-          {product.unit} · {available ? "In stock" : "Out of stock"}
+          {product.unit} · {available ? t("In stock") : t("Out of stock")}
         </p>
         <div className="product-buy">
           <div>
@@ -138,7 +141,7 @@ export function ProductCard({
               disabled={!available}
               onClick={() => addToCart(product)}
             >
-              ADD
+              {t("ADD")}{" "}
             </button>
           )}
         </div>
@@ -210,12 +213,13 @@ export function EmptyState({
   title: string;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="empty-state">
       <span className="empty-icon">
         <Icon />
       </span>
-      <h3>{title}</h3>
+      <h3>{t(title)}</h3>
       <p>{children}</p>
     </div>
   );
@@ -227,11 +231,12 @@ export function IntegrationNote({
   title?: string;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="integration-note">
       <span className="integration-mark">i</span>
       <div>
-        <strong>{title}</strong>
+        <strong>{t(title)}</strong>
         <p>{children}</p>
       </div>
     </div>

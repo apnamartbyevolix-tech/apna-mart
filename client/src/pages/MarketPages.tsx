@@ -1,3 +1,4 @@
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -44,14 +45,27 @@ import {
   toMarketShop,
 } from "@/lib/marketplace";
 
-function CategorySymbol({name}:{name:string|null}) {
-  const symbols:Record<string,typeof Store>={basket:ShoppingBag,carrot:Carrot,milk:Milk,book:NotebookPen,apple:Apple,wrench:Wrench,'cooking-pot':CookingPot,shirt:Shirt,sparkles:Sparkles,home:Store,cookie:ShoppingBag};
-  const Icon=symbols[name??'']??Store;
-  return <Icon aria-hidden="true" style={{width:'1em',height:'1em'}}/>;
+function CategorySymbol({ name }: { name: string | null }) {
+  const symbols: Record<string, typeof Store> = {
+    basket: ShoppingBag,
+    carrot: Carrot,
+    milk: Milk,
+    book: NotebookPen,
+    apple: Apple,
+    wrench: Wrench,
+    "cooking-pot": CookingPot,
+    shirt: Shirt,
+    sparkles: Sparkles,
+    home: Store,
+    cookie: ShoppingBag,
+  };
+  const Icon = symbols[name ?? ""] ?? Store;
+  return <Icon aria-hidden="true" style={{ width: "1em", height: "1em" }} />;
 }
 
 export default function Home() {
-  const { townId, zoneId, townName, locality, areas, areasLoading } = useMarket();
+  const { townId, zoneId, townName, locality, areas, areasLoading } =
+    useMarket();
   const query = trpc.marketplace.home.useQuery(
     { townId: townId ?? -1, zoneId: zoneId ?? -1 },
     { enabled: !areasLoading && Boolean(townId && zoneId) }
@@ -139,8 +153,15 @@ export default function Home() {
                       className="category-tile"
                     >
                       <span className="category-art">
-                        <img onError={imageFallback} src={assetFallback} alt="" loading="lazy" />
-                        <span><CategorySymbol name={category.icon}/></span>
+                        <img
+                          onError={imageFallback}
+                          src={assetFallback}
+                          alt=""
+                          loading="lazy"
+                        />
+                        <span>
+                          <CategorySymbol name={category.icon} />
+                        </span>
                       </span>
                       <strong>{category.name}</strong>
                     </Link>
@@ -234,7 +255,11 @@ export default function Home() {
                           {String(i + 1).padStart(2, "0")}
                         </span>
                         <span className="nearby-logo">
-                          <img onError={imageFallback} src={shop.image} alt="" />
+                          <img
+                            onError={imageFallback}
+                            src={shop.image}
+                            alt=""
+                          />
                         </span>
                         <span className="nearby-info">
                           <strong>{shop.name}</strong>
@@ -425,7 +450,9 @@ export function CategoryPage({ slug }: { slug: string }) {
                 </div>
                 <div className="category-banner-art">
                   <img onError={imageFallback} src={assetFallback} alt="" />
-                  <span><CategorySymbol name={category.icon}/></span>
+                  <span>
+                    <CategorySymbol name={category.icon} />
+                  </span>
                 </div>
               </div>
               <div className="notice-line">
@@ -532,8 +559,26 @@ export function ShopPage({ id }: { id: string }) {
                 </span>
                 <h1>{shop.name}</h1>
                 <p>{shop.description}</p>
-                {query.data.openingTime&&query.data.closingTime&&<p className="shop-opening-hours">Online hours: {query.data.openingTime}–{query.data.closingTime} IST{query.data.openingTime>query.data.closingTime?' · closes next morning':''}</p>}
-                {shop.ratingCount > 0 && <p className="shop-rating"><span aria-label={`${shop.ratingAverage?.toFixed(1)} out of 5`}><Star className="size-3" fill="currentColor" /> {shop.ratingAverage?.toFixed(1)}</span> · {shop.ratingCount} verified order reviews</p>}
+                {query.data.openingTime && query.data.closingTime && (
+                  <p className="shop-opening-hours">
+                    Online hours: {query.data.openingTime}–
+                    {query.data.closingTime} IST
+                    {query.data.openingTime > query.data.closingTime
+                      ? " · closes next morning"
+                      : ""}
+                  </p>
+                )}
+                {shop.ratingCount > 0 && (
+                  <p className="shop-rating">
+                    <span
+                      aria-label={`${shop.ratingAverage?.toFixed(1)} out of 5`}
+                    >
+                      <Star className="size-3" fill="currentColor" />{" "}
+                      {shop.ratingAverage?.toFixed(1)}
+                    </span>{" "}
+                    · {shop.ratingCount} verified order reviews
+                  </p>
+                )}
                 <span className="open-pill">
                   <span />
                   {shop.isOpen ? "Open for orders" : "Currently closed"}
@@ -559,19 +604,29 @@ export function ShopPage({ id }: { id: string }) {
             {auth.user ? (
               <Button
                 variant="outline"
-                disabled={toggleFavorite.isPending || favorites.isLoading || !zoneId}
-                onClick={() => toggleFavorite.mutate({
-                  shopId,
-                  townId: townId!,
-                  zoneId: zoneId!,
-                  favorited: !isFavorite,
-                })}
+                disabled={
+                  toggleFavorite.isPending || favorites.isLoading || !zoneId
+                }
+                onClick={() =>
+                  toggleFavorite.mutate({
+                    shopId,
+                    townId: townId!,
+                    zoneId: zoneId!,
+                    favorited: !isFavorite,
+                  })
+                }
               >
                 <Heart fill={isFavorite ? "currentColor" : "none"} />
                 {isFavorite ? "Saved shop" : "Save this shop"}
               </Button>
-            ) : <Link href="/account" className="text-link">Sign in to save this shop <ArrowRight /></Link>}
-            {toggleFavorite.error && <p role="alert">{toggleFavorite.error.message}</p>}
+            ) : (
+              <Link href="/account" className="text-link">
+                Sign in to save this shop <ArrowRight />
+              </Link>
+            )}
+            {toggleFavorite.error && (
+              <p role="alert">{toggleFavorite.error.message}</p>
+            )}
             <section className="content-section">
               <SectionHeading
                 eyebrow="From this local shop"
@@ -595,6 +650,7 @@ export function ShopPage({ id }: { id: string }) {
   );
 }
 export function ProductPage({ id }: { id: string }) {
+  const { t } = useLanguage();
   const [quantity, setQuantity] = useState(1);
   const { addToCart, townId, zoneId, locality, areasLoading } = useMarket();
   const productId = Number(id);
@@ -628,7 +684,11 @@ export function ProductPage({ id }: { id: string }) {
             </Link>
             <div className="product-detail">
               <div className="product-detail-image">
-                <img onError={imageFallback} src={product.image} alt={product.name} />
+                <img
+                  onError={imageFallback}
+                  src={product.image}
+                  alt={product.name}
+                />
                 {product.isDemo && (
                   <span className="demo-sticker">Fictional demo listing</span>
                 )}
@@ -644,17 +704,33 @@ export function ProductPage({ id }: { id: string }) {
                 </p>
                 <div className="detail-price">
                   {formatINR(product.pricePaise)}
-                  {(product.offer?.referencePricePaise||product.mrpPaise)?<del>{formatINR(product.offer?.referencePricePaise||product.mrpPaise!)}</del>:null}
+                  {product.offer?.referencePricePaise || product.mrpPaise ? (
+                    <del>
+                      {formatINR(
+                        product.offer?.referencePricePaise || product.mrpPaise!
+                      )}
+                    </del>
+                  ) : null}
                   <small>per {product.unit}</small>
                 </div>
-                {product.offer&&<p className="detail-active-offer"><strong>{product.offer.title}</strong> · Ends {new Date(product.offer.endsAt).toLocaleString('en-IN')}{product.offer.maxPerOrder?' · Maximum '+product.offer.maxPerOrder+' units per order':''}</p>}
+                {product.offer && (
+                  <p className="detail-active-offer">
+                    <strong>{product.offer.title}</strong> · Ends{" "}
+                    {new Date(product.offer.endsAt).toLocaleString("en-IN")}
+                    {product.offer.maxPerOrder
+                      ? " · Maximum " +
+                        product.offer.maxPerOrder +
+                        " units per order"
+                      : ""}
+                  </p>
+                )}
                 <p className="detail-description">
                   {product.note || "Details are provided by the listed shop."}
                 </p>
                 <p>
                   {product.inStock && product.availability === "available"
-                    ? "In stock"
-                    : "Out of stock"}{" "}
+                    ? t("In stock")
+                    : t("Out of stock")}{" "}
                   · {product.availability}
                   {!query.data.shop.isOpen ? " · shop currently closed" : ""}
                 </p>
@@ -669,8 +745,12 @@ export function ProductPage({ id }: { id: string }) {
                     </button>
                     <strong>{quantity}</strong>
                     <button
-                      disabled={quantity >= (product.offer?.maxPerOrder||100)}
-                      onClick={() => setQuantity(q => Math.min(product.offer?.maxPerOrder||100, q + 1))}
+                      disabled={quantity >= (product.offer?.maxPerOrder || 100)}
+                      onClick={() =>
+                        setQuantity(q =>
+                          Math.min(product.offer?.maxPerOrder || 100, q + 1)
+                        )
+                      }
                       aria-label="Increase quantity"
                     >
                       <Plus />
@@ -704,13 +784,14 @@ export function ProductPage({ id }: { id: string }) {
   );
 }
 function NotAvailable({ title }: { title: string }) {
+  const { t } = useLanguage();
   return (
     <div className="page-wrap">
       <div className="no-results">
         <Store />
-        <h2>{title}</h2>
+        <h2>{t(title)}</h2>
         <Link href="/search" className="text-link">
-          Explore local shops <ArrowRight />
+          {t("Explore local shops")} <ArrowRight />
         </Link>
       </div>
     </div>

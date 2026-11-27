@@ -47,6 +47,7 @@ type MarketContextValue = {
   townName: string;
   locality: string;
   setTown: (value: string) => void;
+  selectArea: (townId: number, zoneId: number) => boolean;
   setLocality: (value: string) => void;
   areas: RouterOutputs["marketplace"]["areas"] | undefined;
   areasLoading: boolean;
@@ -220,6 +221,27 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       townName,
       locality,
       setTown,
+      selectArea: (nextTown: number, nextZone: number) => {
+        if (
+          !areasQuery.data?.zones.some(
+            zone => zone.id === nextZone && zone.townId === nextTown
+          )
+        )
+          return false;
+        if (
+          zoneId &&
+          zoneId !== nextZone &&
+          cart.length &&
+          !window.confirm(
+            "Changing your area clears this shop's cart. Continue?"
+          )
+        )
+          return false;
+        if (zoneId && zoneId !== nextZone) setCart([]);
+        setTownChoice(String(nextTown));
+        setZoneChoice(String(nextZone));
+        return true;
+      },
       setLocality,
       areas: areasQuery.data,
       areasLoading: areasQuery.isLoading,
@@ -253,12 +275,12 @@ export function LoginButton({
   children?: ReactNode;
   className?: string;
 }) {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   return (
     <Button
       className={className}
       onClick={() => {
-        navigate("/login");
+        navigate("/login?returnTo=" + encodeURIComponent(location));
       }}
     >
       {children}
@@ -270,7 +292,13 @@ export function LoginButton({
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="brand-lockup" aria-label="Apna Mart home">
-      <img src="/brand/apna-mart-icon-192.png" alt="" width={36} height={36} className="shrink-0 object-contain" />
+      <img
+        src="/brand/apna-mart-icon-192.png"
+        alt=""
+        width={36}
+        height={36}
+        className="shrink-0 object-contain"
+      />
       {!compact && (
         <span className="brand-wordmark">
           Apna <b>Mart</b>
@@ -280,336 +308,4 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function MarketShell({ children }: { children: ReactNode }) {
-  const {
-    cart,
-    cartNotice,
-    locality,
-    setTown,
-    setLocality,
-    townId,
-    zoneId,
-    areas,
-    areasLoading,
-    auth,
-  } = useMarket();
-  const [location] = useLocation();
-  const [search, setSearch] = useState("");
-  const [searchTerm, setSearchTerm] = useState(""),
-    [searchOpen, setSearchOpen] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setSearchTerm(search.trim()), 250);
-    return () => clearTimeout(timer);
-  }, [search]);
-  const suggestions = trpc.marketplace.search.useQuery(
-    { q: searchTerm, townId: townId || -1, zoneId: zoneId || -1 },
-    {
-      enabled: searchOpen && searchTerm.length >= 2 && !!townId && !!zoneId,
-      staleTime: 5000,
-    }
-  );
-  const submitSearch = () => {
-    setSearchOpen(false);
-    navigate("/search?q=" + encodeURIComponent(search.trim()));
-  };
-  const [, navigate] = useLocation();
-  const count = cart.reduce((sum, line) => sum + line.quantity, 0);
-  const workspace = false;
-  const towns = areas?.towns ?? [];
-  const localZones = (areas?.zones ?? []).filter(
-    zone => zone.townId === townId
-  );
-  const zoneChoice = zoneId ? String(zoneId) : "";
-
-  return (
-    <div
-      className={"app-frame" + (location === "/login" ? " login-route" : "")}
-    >
-      {auth.user?.loginMethod === "review-demo" && <ReviewDemoBanner />}
-      <div className="demo-strip">
-        {workspace
-          ? "Protected marketplace workspace · actions are authorized by the server"
-          : "Your local shops · Shop prices · Delivery or pickup"}
-      </div>
-      <header className="market-header">
-        <div className="header-main">
-          <BrandMark />
-          <div
-            className="location-picker"
-            aria-label="Choose marketplace location"
-          >
-            <MapPin className="size-4 text-leaf" />
-            <span>
-              <small>
-                {areasLoading
-                  ? "LOADING SERVICE AREAS"
-                  : towns.length
-                    ? "SHOP IN"
-                    : "NO ACTIVE SERVICE AREAS"}
-              </small>
-              <label className="location-field">
-                <span>Town</span>
-              <select
-                aria-label="Town"
-                value={townId ? String(townId) : ""}
-                onChange={e => setTown(e.target.value)}
-                disabled={areasLoading || towns.length === 0}
-              >
-                <option value="">Choose town</option>
-                {towns.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}, {t.state}
-                  </option>
-                ))}
-              </select>
-              </label>
-              <label className="location-field">
-                <span>Service area</span>
-              <select
-                aria-label="Service area"
-                value={zoneChoice}
-                onChange={e => setLocality(e.target.value)}
-                disabled={!townId || localZones.length === 0}
-              >
-                <option value="">Choose service area</option>
-                {localZones.map(zone => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.locality}
-                    {zone.name && zone.name !== zone.locality
-                      ? ` · ${zone.name}`
-                      : ""}
-                    {zone.postalCode && zone.postalCode !== zone.locality && zone.postalCode !== zone.name ? ` · ${zone.postalCode}` : ""}
-                  </option>
-                ))}
-              </select>
-              </label>
-              {zoneId && (
-                <small className="selected-locality">
-                  {locality} · service area selected
-                </small>
-              )}
-            </span>
-          </div>
-          <div className="header-links">
-            <Link href="/offers" className="header-text-link">
-              <BadgePercent className="size-4" /> Today’s offers
-            </Link>
-            <Link
-              href="/account"
-              aria-label="Your account"
-              className="header-icon-link"
-            >
-              <UserRound className="size-4" />
-              <span>{auth.user?.name || "Account"}</span>
-            </Link>
-            <Link
-              href="/cart"
-              aria-label={"Your cart" + (count ? ", " + count + " items" : "")}
-              className="header-icon-link cart-link"
-            >
-              <ShoppingBag className="size-4" />
-              <span>Cart</span>
-              {count > 0 && <b className="cart-count">{count}</b>}
-            </Link>
-          </div>
-        </div>
-        {!workspace && (
-          <div className="search-row">
-            <Search className="search-icon size-5" />
-            <input
-              value={search}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
-              onChange={e => {
-                setSearch(e.target.value);
-                setSearchOpen(true);
-              }}
-              onKeyDown={e => {
-                if (e.key === "Enter") submitSearch();
-                if (e.key === "Escape") setSearchOpen(false);
-              }}
-              placeholder="Search shops, products and essentials…"
-              aria-label="Search local shops and products"
-              aria-controls={
-                searchOpen && searchTerm.length >= 2
-                  ? "local-search-suggestions"
-                  : undefined
-              }
-            />
-            {search && (
-              <button onClick={submitSearch} className="search-submit">
-                Search
-              </button>
-            )}
-            {searchOpen && searchTerm.length >= 2 && zoneId && (
-              <div
-                id="local-search-suggestions"
-                className="local-search-suggestions"
-              >
-                <small>IN YOUR SELECTED AREA</small>
-                {suggestions.isFetching && (
-                  <p role="status">Finding local products…</p>
-                )}
-                {suggestions.error && (
-                  <p>Search is temporarily unavailable. Please try again.</p>
-                )}
-                {!suggestions.isFetching && !suggestions.error && (
-                  <>
-                    {suggestions.data?.products.slice(0, 4).map(p => (
-                      <Link
-                        key={p.id}
-                        href={"/product/" + p.id}
-                        onClick={() => setSearchOpen(false)}
-                      >
-                        <Search size={15} />
-                        <span>
-                          <strong>{p.name}</strong>
-                          <small>{p.shopName}</small>
-                        </span>
-                        <b>{formatINR(p.pricePaise)}</b>
-                      </Link>
-                    ))}
-                    {suggestions.data?.shops.slice(0, 2).map(p => (
-                      <Link
-                        key={"s" + p.id}
-                        href={"/shop/" + p.id}
-                        onClick={() => setSearchOpen(false)}
-                      >
-                        <Store size={15} />
-                        <span>
-                          <strong>{p.shopName}</strong>
-                          <small>Shop</small>
-                        </span>
-                        <ArrowRight size={15} />
-                      </Link>
-                    ))}
-                  </>
-                )}
-                <button onClick={submitSearch}>
-                  See all results for “{search.trim()}”<ArrowRight size={15} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </header>
-      <main className="page-content">
-        {cartNotice && (
-          <div className="service-area-empty" role="status">
-            {cartNotice}
-          </div>
-        )}
-        {!workspace &&
-          !areasLoading &&
-          (!towns.length || !areas?.zones.length) && (
-            <div className="service-area-empty">
-              <MapPin />
-              <span>
-                <strong>
-                  {!towns.length
-                    ? "No active towns are available yet."
-                    : "No active service zones are available yet."}
-                </strong>
-                <small>
-                  {!towns.length
-                    ? "The marketplace will appear here when a town is activated."
-                    : "Ask an administrator to add an active service zone."}
-                </small>
-              </span>
-            </div>
-          )}
-        {!workspace &&
-          !areasLoading &&
-          Boolean(townId) &&
-          !zoneId &&
-          localZones.length > 0 && (
-            <div className="service-area-empty">
-              <MapPin />
-              <span>
-                <strong>Choose your service area.</strong>
-                <small>
-                  Select your locality above to see shops that can serve it.
-                </small>
-              </span>
-            </div>
-          )}
-        {children}
-      </main>
-      <footer className="market-footer">
-        <div className="footer-inner">
-          <div>
-            <BrandMark />
-            <p>Good things, from shops around your home.</p>
-          </div>
-          <div className="footer-links">
-            <Link href="/categories">Categories</Link>
-            <Link href="/offers">Offers</Link>
-            <Link href="/orders">Your orders</Link>
-            <Link href="/account">Account & privacy</Link>
-              <Link href="/privacy">Privacy</Link>
-              <Link href="/account-deletion">Account deletion</Link>
-          </div>
-        </div>
-        <p className="footer-note">
-          Customer handover codes are shown privately in signed-in orders.
-        </p>
-      </footer>
-      {!workspace && (
-        <div className="customer-dock">
-          {count > 0 && location !== "/cart" && location !== "/checkout" && (
-            <Link href="/cart" className="cart-peek">
-              <span>
-                <ShoppingBag size={18} /> {count}{" "}
-                {count === 1 ? "item" : "items"} in your cart
-              </span>
-              <strong>
-                View cart <ArrowRight size={17} />
-              </strong>
-            </Link>
-          )}
-          <nav className="mobile-nav" aria-label="Main navigation">
-            <Link href="/" className={location === "/" ? "active" : ""}>
-              <House />
-              <span>Home</span>
-            </Link>
-            <Link
-              href="/categories"
-              className={location.startsWith("/categor") ? "active" : ""}
-            >
-              <LayoutGrid />
-              <span>Categories</span>
-            </Link>
-            <Link
-              href="/offers"
-              className={location.startsWith("/offers") ? "active" : ""}
-            >
-              <BadgePercent />
-              <span>Offers</span>
-            </Link>
-            <Link
-              href="/cart"
-              className={
-                location === "/cart" || location === "/checkout" ? "active" : ""
-              }
-            >
-              <ShoppingBag />
-              <span>Cart{count ? ` · ${count}` : ""}</span>
-            </Link>
-            <Link
-              href="/orders"
-              className={
-                location.startsWith("/orders") ||
-                location.startsWith("/account")
-                  ? "active"
-                  : ""
-              }
-            >
-              <UserRound />
-              <span>{auth.user ? "You" : "Sign in"}</span>
-            </Link>
-          </nav>
-        </div>
-      )}
-    </div>
-  );
-}
+export { CustomerShell as MarketShell } from "./CustomerShell";

@@ -1,3 +1,4 @@
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/cart";
 
 export function CheckoutPage() {
+  const { t } = useLanguage();
   const { cart, auth, clearCart, setQuantity, townId, zoneId } = useMarket();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
@@ -101,11 +103,11 @@ export function CheckoutPage() {
   currentFingerprint.current = fingerprint;
   const ready = Boolean(
     auth.user &&
-      cart.length &&
-      shopId &&
-      townId &&
-      zoneId &&
-      (fulfilment === "pickup" || addressId)
+    cart.length &&
+    shopId &&
+    townId &&
+    zoneId &&
+    (fulfilment === "pickup" || addressId)
   );
   const quoteQ = trpc.marketplace.quoteOrder.useQuery(input, {
     enabled: ready,
@@ -154,15 +156,15 @@ export function CheckoutPage() {
   if (!cart.length)
     return (
       <div className="page-wrap">
-        <EmptyState icon={ShoppingBag} title="Nothing to review">
+        <EmptyState icon={ShoppingBag} title={t("Nothing to review")}>
           Add products to your cart before checkout.
         </EmptyState>
         <Link href="/search" className="primary-link">
-          Browse shops <ArrowRight />
+          {t("Browse shops")} <ArrowRight />
         </Link>
         {auth.user && (
           <Link href="/orders" className="text-link">
-            Check submitted orders <ArrowRight />
+            {t("Check submitted orders")} <ArrowRight />
           </Link>
         )}
       </div>
@@ -173,11 +175,11 @@ export function CheckoutPage() {
         <div className="login-required">
           <UserRound />
           <div>
-            <strong>Sign in to place an order</strong>
+            <strong>{t("Sign in to place an order")}</strong>
             <p>Your orders and saved addresses are private to your account.</p>
           </div>
           <Link href="/login" className="primary-link">
-            Sign in <ArrowRight />
+            {t("Sign in")} <ArrowRight />
           </Link>
         </div>
       </div>
@@ -197,10 +199,10 @@ export function CheckoutPage() {
               items.
             </p>
             <Link href="/cart" className="text-link">
-              Review cart <ArrowRight />
+              {t("Review cart")} <ArrowRight />
             </Link>
             <Link href="/orders" className="text-link">
-              Check submitted orders <ArrowRight />
+              {t("Check submitted orders")} <ArrowRight />
             </Link>
             <Button
               variant="outline"
@@ -209,7 +211,7 @@ export function CheckoutPage() {
                 void addressesQ.refetch();
               }}
             >
-              Try again
+              {t("Try again")}{" "}
             </Button>
           </div>
         </div>
@@ -227,18 +229,18 @@ export function CheckoutPage() {
   return (
     <div className="page-wrap checkout-page">
       <Link href="/cart" className="back-link">
-        <ArrowLeft /> Back to cart
+        <ArrowLeft /> {t("Back to cart")}{" "}
       </Link>
       <div className="page-intro">
         <p className="eyebrow">A CLEAR REVIEW BEFORE YOU ORDER</p>
-        <h1>Confirm your order</h1>
+        <h1>{t("Confirm your order")}</h1>
         <p>
           Cash on delivery or cash on pickup. Payment stays pending until actual
           handover.
         </p>
       </div>
       {pendingAttempt?.customerId === auth.user.id && (
-        <IntegrationNote title="A previous checkout may have completed">
+        <IntegrationNote title={t("A previous checkout may have completed")}>
           Check the submitted order before placing another one, including when
           stock is now unavailable.
           <Button
@@ -274,7 +276,7 @@ export function CheckoutPage() {
             {checkingSubmission ? "Checking…" : "Check previous submission"}
           </Button>
           <Link href="/orders" className="text-link">
-            Order history <ArrowRight />
+            {t("Order history")} <ArrowRight />
           </Link>
         </IntegrationNote>
       )}
@@ -298,10 +300,10 @@ export function CheckoutPage() {
                 void quoteQ.refetch();
               }}
             >
-              Refresh current quote
+              {t("Refresh current quote")}{" "}
             </Button>
             <Link href="/cart" className="text-link">
-              Edit cart <ArrowRight />
+              {t("Edit cart")} <ArrowRight />
             </Link>
           </div>
         </div>
@@ -310,7 +312,7 @@ export function CheckoutPage() {
         <div className="checkout-steps">
           <section className="checkout-card">
             <h2>
-              <span>1</span> Delivery or pickup
+              <span>1</span> {t("Delivery or pickup")}{" "}
             </h2>
             <div className="choice-row">
               <button
@@ -323,7 +325,7 @@ export function CheckoutPage() {
                 onClick={() => setFulfilment("delivery")}
               >
                 <MapPin />
-                <strong>Deliver to me</strong>
+                <strong>{t("Deliver to me")}</strong>
                 <small>
                   {shop.deliveryEnabled
                     ? "Address in this shop's service area"
@@ -340,7 +342,7 @@ export function CheckoutPage() {
                 onClick={() => setFulfilment("pickup")}
               >
                 <Store />
-                <strong>I'll pick it up</strong>
+                <strong>{t("I'll pick it up")}</strong>
                 <small>
                   {shop.pickupEnabled
                     ? "Cash at the shop"
@@ -351,14 +353,14 @@ export function CheckoutPage() {
             {fulfilment === "delivery" &&
               (compatibleAddresses.length ? (
                 <label className="field-label">
-                  Delivery address
+                  {t("Delivery address")}{" "}
                   <select
                     disabled={place.isPending}
                     value={addressId ?? ""}
                     onChange={event => setAddressId(Number(event.target.value))}
                   >
                     <option value="" disabled>
-                      Select an address
+                      {t("Select an address")}{" "}
                     </option>
                     {compatibleAddresses.map(address => (
                       <option key={address.id} value={address.id}>
@@ -384,17 +386,19 @@ export function CheckoutPage() {
                     )}
                 </label>
               ) : (
-                <IntegrationNote title="No address matches this shop's service area">
+                <IntegrationNote
+                  title={t("No address matches this shop's service area")}
+                >
                   Add an address in {shop.locality} or choose pickup.{" "}
                   <Link href="/account" className="text-link">
-                    Add or update an address <ArrowRight />
+                    {t("Add or update an address")} <ArrowRight />
                   </Link>
                 </IntegrationNote>
               ))}
           </section>
           <section className="checkout-card">
             <h2>
-              <span>2</span> Payment method
+              <span>2</span> {t("Payment method")}{" "}
             </h2>
             <label className="radio-row selected">
               <input type="radio" checked readOnly />
@@ -404,37 +408,37 @@ export function CheckoutPage() {
                     ? "Cash on delivery"
                     : "Cash on pickup"}
                 </strong>
-                <small>Pay in cash at handover.</small>
+                <small>{t("Pay in cash at handover.")}</small>
               </span>
             </label>
-            <IntegrationNote title="Cash only">
+            <IntegrationNote title={t("Cash only")}>
               Online payments are not enabled. Your handover code is shown
               privately in your order; no SMS is sent.
             </IntegrationNote>
           </section>
           <section className="checkout-card">
             <h2>
-              <span>3</span> Notes for the shop
+              <span>3</span> {t("Notes for the shop")}{" "}
             </h2>
             <label className="field-label">
-              Order note
+              {t("Order note")}{" "}
               <textarea
                 disabled={place.isPending}
                 value={notes}
                 onChange={event => setNotes(event.target.value)}
                 maxLength={2000}
                 rows={3}
-                placeholder="Optional instruction"
+                placeholder={t("Optional instruction")}
               />
             </label>
             <label className="field-label">
-              Substitution preference
+              {t("Substitution preference")}{" "}
               <input
                 disabled={place.isPending}
                 value={substitution}
                 onChange={event => setSubstitution(event.target.value)}
                 maxLength={80}
-                placeholder="Optional preference"
+                placeholder={t("Optional preference")}
               />
             </label>
             <small>
@@ -485,7 +489,7 @@ export function CheckoutPage() {
                   disabled={place.isPending}
                   onClick={() => setQuantity(product.id, 0)}
                 >
-                  <Trash2 /> Remove
+                  <Trash2 /> {t("Remove")}{" "}
                 </button>
               </div>
             );
@@ -494,11 +498,11 @@ export function CheckoutPage() {
           {quote ? (
             <>
               <div>
-                <span>Items subtotal</span>
+                <span>{t("Items subtotal")}</span>
                 <strong>{formatINR(quote.totals.subtotalPaise)}</strong>
               </div>
               <div>
-                <span>Delivery</span>
+                <span>{t("Delivery")}</span>
                 <strong>
                   {fulfilment === "delivery"
                     ? formatINR(quote.totals.deliveryFeePaise)
@@ -506,11 +510,11 @@ export function CheckoutPage() {
                 </strong>
               </div>
               <div>
-                <span>Platform fee</span>
+                <span>{t("Platform fee")}</span>
                 <strong>{formatINR(quote.totals.platformFeePaise)}</strong>
               </div>
               <div>
-                <span>Total payable</span>
+                <span>{t("Total payable")}</span>
                 <strong>{formatINR(quote.totals.totalPaise)}</strong>
               </div>
             </>
@@ -542,7 +546,9 @@ export function CheckoutPage() {
               }
             />
             <span>
-              I reviewed the current items, address and total payable.
+              {t(
+                "I reviewed the current items, address and total payable."
+              )}{" "}
             </span>
           </label>
           <Button
