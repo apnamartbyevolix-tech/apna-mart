@@ -137,6 +137,22 @@ const workflow = describe.skipIf(!integrationEnabled)(
       return who.marketplace.placeOrder({ ...input, quoteFingerprint: quote.quoteFingerprint });
     }
 
+    it("issues a usable HTTP-only cookie only after the isolated local demo guards", async () => {
+      vi.stubEnv("MTM_ENABLE_DEV_AUTH", "1"); vi.stubEnv("MANUS_PROJECT_ID", "local-demo-cookie-test");
+      const cookie = vi.fn(), clearCookie = vi.fn();
+      try {
+        const local = appRouter.createCaller({ req: { headers: { host: "127.0.0.1:5210" }, socket: { remoteAddress: "127.0.0.1" } }, res: { cookie, clearCookie }, user: null } as unknown as TrpcContext);
+        const result = await local.auth.standaloneLogin({ persona: "customer" });
+        expect(result.user?.role).toBe("user");
+        expect(cookie.mock.calls[0][2]).toMatchObject({ httpOnly: true, path: "/", sameSite: "lax", secure: false });
+        const remote = appRouter.createCaller({ req: { headers: { host: "example.invalid" }, socket: { remoteAddress: "203.0.113.1" } }, res: { cookie }, user: null } as unknown as TrpcContext);
+        await expect(remote.auth.standaloneLogin({ persona: "customer" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        expect(cookie).toHaveBeenCalledTimes(1);
+        await local.auth.logout();
+        expect(clearCookie.mock.calls.at(-1)?.[1]).toMatchObject({ httpOnly: true, sameSite: "lax", secure: false });
+      } finally { vi.unstubAllEnvs(); }
+    });
+
     it("reserves a shared SMS ceiling atomically across concurrent requests", async () => {
       const prefix = `budget_${randomUUID()}_`;
       const env = { MTM_SMS_DAILY_LIMIT: "3", MTM_SMS_MONTHLY_LIMIT: "5" };

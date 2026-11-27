@@ -922,6 +922,12 @@ export const appRouter = router({
       await logoutReviewRequest(ctx.req,ctx.res);
       await logoutMobileRequest(ctx.req,ctx.res);
       const options = getSessionCookieOptions(ctx.req);
+      if (!ENV.isProduction && !process.env.PUBLIC_PREVIEW && (process.env.MTM_ENABLE_DEV_AUTH === "1" || process.env.ALLOW_STANDALONE_DEV_LOGIN === "1")) {
+        try {
+          verifyLocalHostRequest(ctx.req); verifyIsolatedDevDatabaseUrl(process.env.DATABASE_URL);
+          Object.assign(options, { sameSite: "lax", secure: false });
+        } catch { /* Hosted and non-local requests retain secure-cookie policy. */ }
+      }
       ctx.res.clearCookie(COOKIE_NAME, { ...options, maxAge: -1 });
       return { success: true } as const;
     }),
@@ -999,8 +1005,9 @@ export const appRouter = router({
           name: profile.name,
           expiresInMs: ONE_YEAR_MS,
         });
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        // These guards permit only isolated loopback HTTP; Secure/None cookies
+        // are rejected by the local Android WebView. Hosted auth stays unchanged.
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { httpOnly: true, path: "/", sameSite: "lax", secure: false, maxAge: ONE_YEAR_MS });
         const [user] = await db.select().from(users).where(eq(users.openId, profile.openId)).limit(1);
         return { success: true, user: user ?? null };
       }),
