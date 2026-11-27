@@ -18,8 +18,11 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:exported="false" />
+        <activity
+            android:name=".StartupActivity"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

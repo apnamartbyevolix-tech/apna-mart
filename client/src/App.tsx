@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -117,6 +117,7 @@ function Router() {
 }
 
 export default function App() {
+  useEffect(() => { window.MartStartup?.complete(); }, []);
   return (
     <ErrorBoundary>
       <LanguageProvider>
