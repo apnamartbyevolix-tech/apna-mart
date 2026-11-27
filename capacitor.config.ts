@@ -7,7 +7,7 @@ if (liveTest && (preview || release))
   throw new Error("Live Android testing and localhost/release builds must be separate.");
 if (
   preview &&
-  (!["http://127.0.0.1:5205", "http://127.0.0.1:5206"].includes(preview) ||
+  (!["http://127.0.0.1:5205", "http://127.0.0.1:5206", "http://127.0.0.1:5210"].includes(preview) ||
     release)
 )
   throw new Error(
