@@ -20,7 +20,10 @@ describe("PostgreSQL schema migration parity", () => {
         name: c.name, notNull: c.notNull, primary: c.primary, unique: c.isUnique,
         enumValues: c.enumValues, hasDefault: c.hasDefault,
       }));
-      expect(columns(after)).toEqual(columns(before));
+      const additive = name === "products" ? ["taxMeta"] : name === "orderItems" ? ["taxSnapshot"] : [];
+      expect(columns(after).filter(column => !additive.includes(column.name))).toEqual(columns(before));
+      expect(after.columns.filter(column => additive.includes(column.name)).map(column => ({ name: column.name, sqlType: column.getSQLType(), nullable: !column.notNull })))
+        .toEqual(additive.map(name => ({ name, sqlType: "json", nullable: true })));
       expect(after.indexes.map(i => ({ name: i.config.name, unique: i.config.unique })))
         .toEqual(before.indexes.map(i => ({ name: i.config.name, unique: i.config.unique })));
       expect(after.foreignKeys.map(f => f.reference().columns.map(c => c.name)))

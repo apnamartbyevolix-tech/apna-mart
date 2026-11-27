@@ -1,3 +1,4 @@
+import { CatalogueMore, useCatalogue } from "@/components/CataloguePage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -397,105 +398,25 @@ export function SearchPage() {
   );
 }
 export function CategoryPage({ slug }: { slug: string }) {
-  const { townId, zoneId, locality, areas, areasLoading } = useMarket();
-  const home = trpc.marketplace.home.useQuery(
-    { townId: townId ?? -1, zoneId: zoneId ?? -1 },
-    { enabled: !areasLoading && Boolean(townId && zoneId) }
-  );
-  const category = home.data?.categories.find(c => c.slug === slug);
-  const search = trpc.marketplace.search.useQuery(
-    {
-      categoryId: category?.id,
-      townId: townId ?? -1,
-      zoneId: zoneId ?? -1,
-    },
-    { enabled: Boolean(category && townId && zoneId) }
-  );
-  const shops = (search.data?.shops ?? []).map(toMarketShop);
-  const products = (search.data?.products ?? []).map(p =>
-    toMarketProduct(p, p.vendorId)
-  );
-  if (!home.isLoading && !home.error && !category)
-    return <NotAvailable title="Category not found or unavailable" />;
-  return (
-    <div className="listing-page">
-      <Link href="/search" className="back-link">
-        <ArrowLeft /> All local shops
-      </Link>
-      <QueryState
-        loading={areasLoading || home.isLoading || search.isLoading}
-        error={home.error || search.error}
-      >
-        {!townId ? (
-          <EmptyState icon={MapPin} title="No active towns yet">
-            Marketplace listings will appear when an administrator activates a
-            town.
-          </EmptyState>
-        ) : !areas?.zones.some(zone => zone.townId === townId) ? (
-          <EmptyState
-            icon={MapPin}
-            title="No active service zones in this town"
-          >
-            Choose another town or ask an administrator to add a service zone.
-          </EmptyState>
-        ) : (
-          category &&
-          search.data && (
-            <>
-              <div className="category-banner">
-                <div>
-                  <span className="eyebrow">EXPLORE THE NEIGHBOURHOOD</span>
-                  <h1>{category.name}</h1>
-                  <p>Live listings in this enabled marketplace category.</p>
-                </div>
-                <div className="category-banner-art">
-                  <img onError={imageFallback} src={assetFallback} alt="" />
-                  <span>
-                    <CategorySymbol name={category.icon} />
-                  </span>
-                </div>
-              </div>
-              <div className="notice-line">
-                <span className="notice-dot" />
-                Listings marked fictional are demo seed data; records otherwise
-                reflect current backend entries.
-              </div>
-              <section className="content-section">
-                <SectionHeading title="Local shops" />
-                <div className="shop-grid">
-                  {shops.map(shop => (
-                    <ShopCard key={shop.id} shop={shop} />
-                  ))}
-                </div>
-                {!shops.length && (
-                  <div className="soft-empty">
-                    No shops in this category currently match.
-                  </div>
-                )}
-              </section>
-              <section className="content-section">
-                <SectionHeading title="Available products" />
-                <div className="product-grid">
-                  {products.map(p => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      shopName={shops.find(s => s.id === p.shopId)?.name}
-                    />
-                  ))}
-                </div>
-                {!products.length && (
-                  <div className="soft-empty">
-                    No available products currently match.
-                  </div>
-                )}
-              </section>
-            </>
-          )
-        )}
-      </QueryState>
-    </div>
-  );
+  const { t } = useLanguage();
+  const { townId, zoneId, areasLoading } = useMarket();
+  const home = trpc.marketplace.home.useQuery({ townId: townId || -1, zoneId: zoneId || -1 }, { enabled: Boolean(townId && zoneId), retry: false });
+  const category = home.data?.categories.find(row => row.slug === slug);
+  const input = { townId: townId || -1, zoneId: zoneId || -1, categoryId: category?.id };
+  const products = useCatalogue(input, !!category);
+  const shops = useCatalogue({ ...input, kind: "shops" }, !!category);
+  if (!townId || !zoneId) return <EmptyState icon={MapPin} title="Choose your area"><span>{t("Select your pincode above to see available products.")}</span></EmptyState>;
+  if (!areasLoading && !home.isLoading && !home.error && !category) return <NotAvailable title="Category not found or unavailable" />;
+  return <div className="listing-page">
+    <Link href="/categories" className="back-link"><ArrowLeft />{t("All categories")}</Link>
+    <QueryState loading={areasLoading || home.isLoading || products.isLoading || shops.isLoading} error={home.error || products.error || shops.error}>
+      {category && <>
+        <div className="category-banner"><div><span className="eyebrow">{t("EXPLORE THE NEIGHBOURHOOD")}</span><h1>{t(category.name)}</h1><p>{t("Products and shops available in your selected area.")}</p></div><CategorySymbol name={category.icon} /></div>
+        {!!shops.shops.length && <section className="content-section"><SectionHeading title="Local shops" /><div className="shop-grid">{shops.shops.map(shop => <ShopCard key={shop.id} shop={toMarketShop(shop)} />)}</div><CatalogueMore query={shops} /></section>}
+        <section className="content-section"><SectionHeading title="Available products" /><div className="product-grid">{products.products.map(product => <ProductCard key={product.id} product={toMarketProduct(product, product.vendorId)} shopName={product.shopName} />)}</div>{!products.products.length && <EmptyState title="No available products"><span>{t("Try another category or check again later.")}</span></EmptyState>}<CatalogueMore query={products} /></section>
+      </>}
+    </QueryState>
+  </div>;
 }
 export function ShopPage({ id }: { id: string }) {
   const { auth, townId, zoneId, locality, areasLoading } = useMarket();
@@ -521,11 +442,9 @@ export function ShopPage({ id }: { id: string }) {
     },
     onError: error => toast.error(error.message),
   });
+  const catalogue = useCatalogue({ townId: townId || -1, zoneId: zoneId || -1, shopId, onlyStock: false }, valid && Boolean(query.data));
   const shop = query.data && toMarketShop(query.data);
-  const items =
-    query.data?.products.map(p =>
-      toMarketProduct(p, shopId, query.data.category.slug)
-    ) ?? [];
+  const items = catalogue.products.map(product => toMarketProduct(product, shopId, query.data?.category.slug));
   if (!valid || (query.error && query.error.data?.code === "NOT_FOUND"))
     return <NotAvailable title="We couldn't find that shop" />;
   return (
@@ -628,6 +547,7 @@ export function ShopPage({ id }: { id: string }) {
               <p role="alert">{toggleFavorite.error.message}</p>
             )}
             <section className="content-section">
+              <QueryState loading={catalogue.isLoading} error={catalogue.error}>
               <SectionHeading
                 eyebrow="From this local shop"
                 title="Available products"
@@ -642,6 +562,8 @@ export function ShopPage({ id }: { id: string }) {
                   This shop has no currently available products.
                 </EmptyState>
               )}
+              <CatalogueMore query={catalogue} />
+              </QueryState>
             </section>
           </>
         )}

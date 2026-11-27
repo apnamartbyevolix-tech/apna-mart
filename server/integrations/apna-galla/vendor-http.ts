@@ -1,3 +1,5 @@
+import { notifyOrderWork } from "../../marketplace/work-scheduler";
+import { retryOrderSync } from "../../marketplace/retry-order-sync";
 import express, { type Express } from "express";
 import {verifyConnection} from './link-auth';
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
@@ -21,6 +23,7 @@ const requestSchema = z
       "status",
       "return",
       "settings",
+      "retry_sync",
     ]),
     input: z.unknown().optional(),
   })
@@ -65,7 +68,7 @@ export function registerApnaVendor(app: Express) {
           db = await getDb();
         if(b.revision!==(productionConnector()?"1.3":"1.3-sandbox"))throw Error("Incorrect connector revision");
         if (!db) throw Error("Unavailable");
-        const mutating = ["status", "return", "settings"].includes(b.operation);
+        const mutating = ["status", "return", "settings", "retry_sync"].includes(b.operation);
         const fingerprint = createHash("sha256").update(raw).digest("hex");
         const result = await db.transaction(async tx => {
           // Lock the validated merchant mapping: customer IDs or seller IDs from the browser are never trusted.
@@ -150,6 +153,13 @@ export function registerApnaVendor(app: Express) {
                       b.input as any
                     );
                     break;
+                  case "retry_sync": {
+                    const input = z.object({ orderId: z.number().int().positive() }).strict().parse(b.input);
+                    await caller.vendor.orderDetail(input);
+                    output = await retryOrderSync(tx, input.orderId, link.vendor_id);
+                    notifyOrderWork();
+                    break;
+                  }
                   case "settings": {
                     const input = z
                       .object({

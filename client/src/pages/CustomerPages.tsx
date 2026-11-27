@@ -1,3 +1,4 @@
+import { CatalogueMore } from "@/components/CataloguePage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useState } from "react";
 import MobileSignIn from "./MobileSignIn";
@@ -200,10 +201,13 @@ export function CartPage() {
 export function OrdersPage() {
   const { t } = useLanguage();
   const { auth } = useMarket();
-  const query = trpc.marketplace.myOrders.useQuery(undefined, {
+  const query = trpc.marketplace.orderHistory.useInfiniteQuery({}, {
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    refetchOnWindowFocus: true,
     enabled: Boolean(auth.user),
     retry: false,
   });
+  const rows = query.data?.pages.flatMap(page => page.orders) || [];
   if (auth.loading)
     return (
       <div className="page-wrap">
@@ -246,9 +250,9 @@ export function OrdersPage() {
       </div>
       <QueryState loading={query.isLoading} error={query.error}>
         {query.data &&
-          (query.data.length ? (
+          (rows.length ? (
             <div className="order-list">
-              {query.data.map(({ order, shopName }) => (
+              {rows.map(({ order, shopName }) => (
                 <Link
                   key={order.id}
                   href={`/orders/${order.id}`}
@@ -270,10 +274,10 @@ export function OrdersPage() {
               Your submitted marketplace orders will appear here.
             </EmptyState>
           ))}
+        <CatalogueMore query={query} />
       </QueryState>
       <IntegrationNote title="Order updates">
-        Status is loaded from the server when you open this page. Push/SMS
-        notifications are not configured.
+        {t("Open an order for its latest status, collection code and help options.")}
       </IntegrationNote>
     </div>
   );
@@ -281,7 +285,7 @@ export function OrdersPage() {
 
 export function OrderDetailPage({ id }: { id: string }) {
   const { t } = useLanguage();
-  const { auth, replaceCart, townId, zoneId, locality } = useMarket();
+  const { auth, cart, replaceCart, townId, zoneId, locality } = useMarket();
   const [, navigate] = useLocation();
   const orderId = Number(id);
   const valid = Number.isSafeInteger(orderId) && orderId > 0;
@@ -310,7 +314,7 @@ export function OrderDetailPage({ id }: { id: string }) {
   const cancel = trpc.marketplace.cancelOrder.useMutation({
     onSuccess: async () => {
       toast.success("Order cancelled");
-      await Promise.all([utils.marketplace.myOrders.invalidate(), q.refetch()]);
+      await Promise.all([utils.marketplace.myOrders.invalidate(), utils.marketplace.orderHistory.invalidate(), q.refetch()]);
     },
     onError: error => toast.error(error.message),
   });
@@ -328,15 +332,18 @@ export function OrderDetailPage({ id }: { id: string }) {
     onError: error => toast.error(error.message),
   });
   const data = q.data;
-  const buyAgain = trpc.marketplace.shop.useQuery(
+  const buyAgain = trpc.marketplace.browse.useQuery(
     {
       shopId: data?.order.vendorId ?? -1,
+      productIds: data?.items.filter(item => item.productId !== null).map(item => item.productId!) || [1],
+      limit: 50,
+      onlyStock: false,
       townId: townId ?? -1,
       zoneId: zoneId ?? -1,
     },
     {
       enabled: Boolean(
-        buyAgainRequested && data?.order.vendorId && townId && zoneId
+        buyAgainRequested && data?.items.some(item => item.productId !== null) && data?.order.vendorId && townId && zoneId
       ),
     }
   );
@@ -348,6 +355,7 @@ export function OrderDetailPage({ id }: { id: string }) {
       );
       return;
     }
+    if (buyAgainRequested && data && !data.items.some(item => item.productId !== null)) { setBuyAgainRequested(false); toast.error("No current products remain for this order."); return; }
     if (!buyAgainRequested || !data || !buyAgain.data) return;
     setBuyAgainRequested(false);
     const previousItems = new Map(
@@ -356,7 +364,7 @@ export function OrderDetailPage({ id }: { id: string }) {
         .map(item => [item.productId as number, item.quantity])
     );
     const currentProducts = buyAgain.data.products.map(product =>
-      toMarketProduct(product, data.order.vendorId, buyAgain.data.category.slug)
+      toMarketProduct(product, data.order.vendorId)
     );
     const rebuilt = currentProducts
       .filter(
@@ -369,7 +377,7 @@ export function OrderDetailPage({ id }: { id: string }) {
         product,
         quantity: Math.max(
           1,
-          Math.min(100, previousItems.get(product.id) ?? 1)
+          Math.min(100, product.offer?.maxPerOrder || 100, previousItems.get(product.id) ?? 1)
         ),
       }));
     const skipped = data.items
@@ -385,6 +393,7 @@ export function OrderDetailPage({ id }: { id: string }) {
       );
       return;
     }
+    if (cart.length && !window.confirm("Replace the items currently in your cart with this order’s available products?")) return;
     replaceCart(rebuilt);
     toast.success(
       skipped.length
@@ -394,6 +403,7 @@ export function OrderDetailPage({ id }: { id: string }) {
     navigate("/cart");
   }, [
     buyAgainRequested,
+    cart,
     buyAgain.data,
     buyAgain.error,
     data,
@@ -505,6 +515,7 @@ export function OrderDetailPage({ id }: { id: string }) {
                 <span>{t("Subtotal")}</span>
                 <strong>{formatINR(data.order.subtotalPaise)}</strong>
               </div>
+              {data.order.taxPaise > 0 && <div><span>{t("GST included")}</span><strong>{formatINR(data.order.taxPaise)}</strong></div>}
               <div>
                 <span>{t("Delivery fee")}</span>
                 <strong>{formatINR(data.order.deliveryFeePaise)}</strong>
@@ -1093,6 +1104,7 @@ export function SignInPage() {
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
   const isDevEnv = import.meta.env.DEV;
+  const localDemo = trpc.auth.localDemoStatus.useQuery(undefined, { enabled: isDevEnv && !auth.user, retry: false });
 
   const standaloneLogin = trpc.auth.standaloneLogin.useMutation({
     onSuccess: async result => {
@@ -1143,7 +1155,7 @@ export function SignInPage() {
           <>
             <MobileSignIn />
 
-            {isDevEnv && (
+            {isDevEnv && localDemo.data?.enabled && (
               <div
                 className="pilot-auth-card"
                 style={{

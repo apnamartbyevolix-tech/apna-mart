@@ -145,6 +145,7 @@ export function ProductCard({
             </button>
           )}
         </div>
+        {product.gstIncluded && <small className="product-offer-limit">{t("GST included")}</small>}
         <Link href={`/shop/${product.shopId}`} className="product-shop">
           {shopName || product.shopName || "View shop"}
         </Link>
@@ -253,25 +254,27 @@ export function QueryState({
   empty?: boolean;
   children?: ReactNode;
 }) {
+  const { t } = useLanguage();
   if (loading)
     return (
       <div className="loading-card">
         <span className="loading-spinner" />
-        Loading live marketplace records…
+        {t("Loading…")}
       </div>
     );
   if (error)
     return (
       <div className="no-results">
         <Store />
-        <h2>Marketplace data couldn't be loaded</h2>
-        <p>{error instanceof Error ? error.message : "Please try again."}</p>
+        <h2>{t("We could not load this page")}</h2>
+        <p>{t("Check your connection and try again. Your cart is saved on this device.")}</p>
+        <Button onClick={() => window.location.reload()}>{t("Try again")}</Button>
       </div>
     );
   if (empty)
     return (
       <EmptyState title="Nothing listed here yet">
-        No matching records are currently available from the marketplace.
+        {t("No matching products or shops are available here yet.")}
       </EmptyState>
     );
   return <>{children}</>;

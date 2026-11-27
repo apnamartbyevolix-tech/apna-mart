@@ -1,3 +1,4 @@
+import { useConnectivity } from "@/lib/connectivity";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -30,6 +31,7 @@ import {
 } from "@/lib/cart";
 
 export function CheckoutPage() {
+  const online = useConnectivity();
   const { t } = useLanguage();
   const { cart, auth, clearCart, setQuantity, townId, zoneId } = useMarket();
   const [, navigate] = useLocation();
@@ -125,6 +127,7 @@ export function CheckoutPage() {
     onSuccess: async (result, variables) => {
       await Promise.allSettled([
         utils.marketplace.myOrders.invalidate(),
+        utils.marketplace.orderHistory.invalidate(),
         utils.marketplace.orderDetail.invalidate(),
       ]);
       clearCheckoutKey(variables.idempotencyKey);
@@ -147,6 +150,7 @@ export function CheckoutPage() {
       requestAnimationFrame(() => errorSummary.current?.focus());
     },
   });
+  useEffect(() => { if (!online) setConfirmed(""); }, [online]);
   if (auth.loading)
     return (
       <div className="page-wrap">
@@ -175,10 +179,10 @@ export function CheckoutPage() {
         <div className="login-required">
           <UserRound />
           <div>
-            <strong>{t("Sign in to place an order")}</strong>
+            <h1>{t("Sign in to place an order")}</h1>
             <p>Your orders and saved addresses are private to your account.</p>
           </div>
-          <Link href="/login" className="primary-link">
+          <Link href="/login?returnTo=%2Fcheckout" className="primary-link">
             {t("Sign in")} <ArrowRight />
           </Link>
         </div>
@@ -249,10 +253,7 @@ export function CheckoutPage() {
             onClick={async () => {
               setCheckingSubmission(true);
               try {
-                const history = await utils.marketplace.myOrders.fetch();
-                const found = history.find(
-                  row => row.order.idempotencyKey === pendingAttempt.key
-                );
+                const found = await utils.marketplace.checkoutSubmission.fetch({ key: pendingAttempt.key });
                 if (!found) {
                   toast.info(
                     "No submitted order was found yet. Review the current quote, or check again if your connection failed."
@@ -263,7 +264,8 @@ export function CheckoutPage() {
                 if (pendingAttempt.fingerprint === currentFingerprint.current)
                   clearCart();
                 setPendingAttempt(undefined);
-                navigate(`/orders/${found.order.id}`);
+                await utils.marketplace.orderHistory.invalidate();
+                navigate(`/orders/${found.id}`);
               } catch {
                 toast.error(
                   "Could not check your order. Please retry or open order history."
@@ -328,8 +330,8 @@ export function CheckoutPage() {
                 <strong>{t("Deliver to me")}</strong>
                 <small>
                   {shop.deliveryEnabled
-                    ? "Address in this shop's service area"
-                    : "Delivery unavailable"}
+                    ? t("Address in this shop's service area")
+                    : t("Delivery unavailable")}
                 </small>
               </button>
               <button
@@ -345,8 +347,8 @@ export function CheckoutPage() {
                 <strong>{t("I'll pick it up")}</strong>
                 <small>
                   {shop.pickupEnabled
-                    ? "Cash at the shop"
-                    : "Pickup unavailable"}
+                    ? t("Cash at the shop")
+                    : t("Pickup unavailable")}
                 </small>
               </button>
             </div>
@@ -405,8 +407,8 @@ export function CheckoutPage() {
               <span>
                 <strong>
                   {fulfilment === "delivery"
-                    ? "Cash on delivery"
-                    : "Cash on pickup"}
+                    ? t("Cash on delivery")
+                    : t("Cash on pickup")}
                 </strong>
                 <small>{t("Pay in cash at handover.")}</small>
               </span>
@@ -448,7 +450,7 @@ export function CheckoutPage() {
           </section>
         </div>
         <aside className="cart-summary checkout-summary">
-          <p className="eyebrow">FROM ONE SHOP</p>
+          <p className="eyebrow">{t("FROM ONE SHOP")}</p>
           <h2>{shop.shopName}</h2>
           {cart.map(({ product, quantity }) => {
             const quoted = quote?.items.find(
@@ -501,12 +503,13 @@ export function CheckoutPage() {
                 <span>{t("Items subtotal")}</span>
                 <strong>{formatINR(quote.totals.subtotalPaise)}</strong>
               </div>
+              {quote.totals.taxPaise > 0 && <div><span>{t("GST included")}</span><strong>{formatINR(quote.totals.taxPaise)}</strong></div>}
               <div>
                 <span>{t("Delivery")}</span>
                 <strong>
                   {fulfilment === "delivery"
                     ? formatINR(quote.totals.deliveryFeePaise)
-                    : "Pickup"}
+                    : t("Pickup")}
                 </strong>
               </div>
               <div>
@@ -554,6 +557,7 @@ export function CheckoutPage() {
           <Button
             size="lg"
             disabled={
+              !online ||
               !ready ||
               !quote ||
               quoteQ.isFetching ||
@@ -574,12 +578,10 @@ export function CheckoutPage() {
               });
             }}
           >
-            {place.isPending ? "Submitting…" : "Place order"}
+            {!online ? t("Reconnect to place order") : place.isPending ? t("Submitting…") : t("Place order")}
           </Button>
           <p className="summary-small">
-            This quote does not reserve stock. The server checks it again before
-            creating an order. If anything changes, review and confirm again.
-            Retries of the same complete request use the same checkout key.
+            {t("The shop checks availability when you confirm. If anything changes, review the updated total before trying again.")}
           </p>
         </aside>
       </div>

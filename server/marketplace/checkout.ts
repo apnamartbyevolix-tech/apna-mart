@@ -1,3 +1,4 @@
+import { quoteMarketplaceTax } from "../../shared/marketplace-tax";
 import {activeOffer,effectiveProduct} from "../../shared/offers";
 import {withinShopHours} from '../../shared/shop-hours';
 import { connectedCatalogue, publishedSellerCondition, publishedProductCondition } from './publication-policy';
@@ -232,18 +233,23 @@ export async function prepareCheckout(
         code: "CONFLICT",
         message: `${p.name} has insufficient stock`,
       });
-    return { product: p, quantity: i.quantity };
+    const tax = p.taxMeta;
+    const net = tax && (offer ? tax.offerNetUnitPaise : tax.netUnitPaise);
+    if (tax && (!net || tax.schema !== 1 || quoteMarketplaceTax(net, tax.gstBps, 1).totalPaise !== p.pricePaise)) throw new TRPCError({ code: "CONFLICT", message: "Product tax or price changed. Refresh this shop." });
+    const line = tax ? quoteMarketplaceTax(net!, tax.gstBps, i.quantity) : { taxablePaise: p.pricePaise * i.quantity, taxPaise: 0, totalPaise: p.pricePaise * i.quantity };
+    return { product: p, quantity: i.quantity, lineTotalPaise: line.totalPaise, taxPaise: line.taxPaise, taxSnapshot: tax ? { ...tax, acceptedNetUnitPaise: net, ...line } : null };
   });
   const totals = calculateOrderTotals({
     items: items.map(i => ({
-      pricePaise: i.product.pricePaise,
-      quantity: i.quantity,
+      pricePaise: i.lineTotalPaise,
+      quantity: 1,
     })),
     deliveryFeePaise:
       input.fulfillmentType === "delivery" ? shop.deliveryFeePaise : 0,
     platformFeePaise: shop.platformFeePaise,
     commissionBps: shop.commissionBps,
   });
+  totals.taxPaise = items.reduce((sum, item) => sum + item.taxPaise, 0);
   if (totals.subtotalPaise < shop.minimumOrderPaise)
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -258,7 +264,8 @@ export async function prepareCheckout(
       unit: i.product.unit,
       quantity: i.quantity,
       unitPricePaise: i.product.pricePaise,
-      lineTotalPaise: i.product.pricePaise * i.quantity,
+      lineTotalPaise: i.lineTotalPaise,
+      taxSnapshot: i.taxSnapshot,
     })),
     totals: payable,
     address: addressSnapshot

@@ -1,4 +1,5 @@
 import { registerHealth } from "../marketplace/health";
+import { createApiGuard } from "../marketplace/api-resources";
 import "dotenv/config";
 import { registerLocation } from "../marketplace/location";
 import { registerMobileAuth } from "../auth/mobile-auth";
@@ -82,6 +83,7 @@ async function startServer() {
   app.disable("x-powered-by");
   // Render's edge is the single trusted hop. DNS-only custom domains reach it directly.
   if (process.env.RENDER === "true") app.set("trust proxy", 1);
+  app.use(createApiGuard());
   const server = createServer(app);
   server.requestTimeout = 15000;
   server.headersTimeout = 10000;
@@ -90,7 +92,8 @@ async function startServer() {
   registerReviewDemo(app);
   registerMobileAuth(app);
   registerApnaVendor(app);
-  registerApnaSandbox(app);
+  const stopOrderWorker = registerApnaSandbox(app);
+  server.on("close", () => stopOrderWorker?.());
   // Preserve the existing 2 MB image uploads without permitting arbitrary 50 MB requests.
   app.use(express.json({ limit: "3mb" }));
   app.use(express.urlencoded({ limit: "64kb", extended: false }));

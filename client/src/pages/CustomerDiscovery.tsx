@@ -1,3 +1,4 @@
+import { CatalogueMore, useCatalogue, useOfferBoundary } from "@/components/CataloguePage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
@@ -56,6 +57,7 @@ function CategoryTiles({
   categories: any[];
   all?: boolean;
 }) {
+  const { t } = useLanguage();
   return (
     <div className={"discover-categories " + (all ? "all-categories" : "")}>
       {categories.slice(0, all ? categories.length : 8).map((c, i) => {
@@ -70,7 +72,7 @@ function CategoryTiles({
               <Icon strokeWidth={1.5} />
               <i />
             </span>
-            <strong>{c.name}</strong>
+            <strong>{t(c.name)}</strong>
           </Link>
         );
       })}
@@ -125,6 +127,7 @@ function useDiscovery() {
       })),
     [q.data, shops]
   );
+  useOfferBoundary(products, q.refetch);
   return { ...area, q, shops, products };
 }
 function ChooseArea() {
@@ -291,74 +294,24 @@ export function CategoriesPage() {
 }
 export function OffersPage() {
   const { t } = useLanguage();
-  const d = useDiscovery(),
-    params = new URLSearchParams(useSearch()),
-    [selected, setSelected] = useState(params.get("festival") || "All"),
-    [sort, setSort] = useState("saving");
-  const offers = d.products.filter(p => p.offer && p.inStock),
-    festivals = Array.from(
-      new Set(offers.map(p => p.offer?.festival).filter(Boolean))
-    ) as string[];
-  const filtered = offers
-    .filter(p => selected === "All" || p.offer?.festival === selected)
-    .sort((a, b) =>
-      sort === "price"
-        ? a.pricePaise - b.pricePaise
-        : (b.offer!.referencePricePaise - b.pricePaise) /
-            b.offer!.referencePricePaise -
-          (a.offer!.referencePricePaise - a.pricePaise) /
-            a.offer!.referencePricePaise
-    );
-  return (
-    <div className="discovery-page">
-      <div className="discover-page-title">
-        <small>GOOD THINGS, BETTER PRICES</small>
-        <h1>Offers around your corner.</h1>
-        <p>
-          Discover genuine shopkeeper offers. Check the dates, pack size and
-          offer limits.
-        </p>
-      </div>
-      <div className="discover-filter-row">
-        <div>
-          {["All", ...festivals].map(f => (
-            <button
-              className={selected === f ? "selected" : ""}
-              key={f}
-              onClick={() => setSelected(f)}
-            >
-              {f === "All" ? t("All offers") : f}
-            </button>
-          ))}
-        </div>
-        <label>
-          <span className="sr-only">Sort offers</span>
-          <select
-            aria-label="Sort offers"
-            value={sort}
-            onChange={e => setSort(e.target.value)}
-          >
-            <option value="saving">{t("Highest saving %")}</option>
-            <option value="price">{t("Price: low to high")}</option>
-          </select>
-        </label>
-      </div>
-      {!d.zoneId ? (
-        <ChooseArea />
-      ) : (
-        <QueryState loading={d.q.isLoading} error={d.q.error}>
-          {filtered.length ? (
-            <ProductShelf products={filtered} />
-          ) : (
-            <EmptyState icon={BadgePercent} title="New offers are on their way">
-              There are no active offers for this selection. Browse the
-              categories or check again later.
-            </EmptyState>
-          )}
-        </QueryState>
-      )}
-    </div>
-  );
+  const area = useMarket();
+  const [festival, setFestival] = useState(new URLSearchParams(useSearch()).get("festival") || "");
+  const [filter, setFilter] = useState(festival);
+  const [sort, setSort] = useState<"relevant" | "low">("relevant");
+  const query = useCatalogue({ townId: area.townId || -1, zoneId: area.zoneId || -1, offersOnly: true, festival: filter || undefined, sort });
+  const products = query.products.map(product => ({ ...toMarketProduct(product), shopName: product.shopName }));
+  return <div className="discovery-page">
+    <div className="discover-page-title"><small>{t("OFFERS FROM LOCAL SHOPS")}</small><h1>{t("Offers around your corner.")}</h1><p>{t("Check the dates, pack size and offer limits before ordering.")}</p></div>
+    <form className="discover-filter-row" onSubmit={event => { event.preventDefault(); setFilter(festival.trim()); }}>
+      <label>{t("Festival or occasion")}<input maxLength={80} value={festival} onChange={event => setFestival(event.target.value)} placeholder={t("Search offers by occasion")} /></label>
+      <button type="submit" className="mart-load-more">{t("Apply")}</button>
+      <select aria-label={t("Sort offers")} value={sort} onChange={event => setSort(event.target.value as "relevant" | "low")}><option value="relevant">{t("Default order")}</option><option value="low">{t("Price: low to high")}</option></select>
+    </form>
+    {!area.zoneId ? <ChooseArea /> : <QueryState loading={query.isLoading} error={query.error}>
+      {products.length ? <ProductShelf products={products} /> : <EmptyState icon={BadgePercent} title="No active offers for this selection"><span>{t("Try another occasion or browse all products.")}</span><Link href="/search">{t("Browse products")}</Link></EmptyState>}
+      <CatalogueMore query={query} />
+    </QueryState>}
+  </div>;
 }
 export function CustomerSearchPage() {
   const { t } = useLanguage();
@@ -371,27 +324,9 @@ export function CustomerSearchPage() {
     [kind, setKind] = useState(
       params.get("view") === "shops" ? "shops" : "products"
     );
-  const q = trpc.marketplace.browse.useInfiniteQuery(
-    {
-      q: text || undefined,
-      townId: area.townId || -1,
-      zoneId: area.zoneId || -1,
-      kind: kind === "shops" ? "shops" : "products",
-      onlyStock,
-      sort: sort === "low" || sort === "high" ? sort : "relevant",
-    },
-    {
-      enabled: !!(area.townId && area.zoneId),
-      retry: false,
-      getNextPageParam: page => page.nextCursor ?? undefined,
-    }
-  );
-  const shops = (q.data?.pages.flatMap(page => page.shops) || []).map(
-    toMarketShop
-  );
-  const products = (q.data?.pages.flatMap(page => page.products) || []).map(
-    product => ({ ...toMarketProduct(product), shopName: product.shopName })
-  );
+  const q = useCatalogue({ q: text || undefined, townId: area.townId || -1, zoneId: area.zoneId || -1, kind: kind === "shops" ? "shops" : "products", onlyStock, sort: sort === "low" || sort === "high" ? sort : "relevant" });
+  const shops = q.shops.map(toMarketShop);
+  const products = q.products.map(product => ({ ...toMarketProduct(product), shopName: product.shopName }));
   return (
     <div className="discovery-page">
       <div className="discover-page-title">
@@ -454,20 +389,7 @@ export function CustomerSearchPage() {
               ))}
             </div>
           )}
-          {q.hasNextPage && (
-            <button
-              className="mart-load-more"
-              disabled={q.isFetchingNextPage}
-              onClick={() => void q.fetchNextPage()}
-            >
-              {t(q.isFetchingNextPage ? "Loading…" : "Load more")}
-            </button>
-          )}
-          {q.isFetchNextPageError && (
-            <p role="status">
-              {t("Could not load more items. Please try again.")}
-            </p>
-          )}
+          <CatalogueMore query={q} />
         </QueryState>
       )}
     </div>

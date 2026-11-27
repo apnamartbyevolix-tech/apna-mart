@@ -1,3 +1,4 @@
+import { boundedFetch } from "@/lib/request";
 import { trpc } from "@/lib/trpc";
 import { COOKIE_NAME, UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import "./mart-theme.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: false, staleTime: 15000, refetchOnWindowFocus: false },
-    mutations: { retry: false },
+    mutations: { retry: false, networkMode: "always" },
   },
 });
 
@@ -73,7 +74,7 @@ const trpcClient = trpc.createClient({
         return {};
       },
       fetch(input, init) {
-        return globalThis.fetch(input, {
+        return boundedFetch(input, {
           ...(init ?? {}),
           credentials: "include",
         });

@@ -9,8 +9,11 @@ const coordinates = z
   .strict();
 export function createLocationLookup(
   send: typeof fetch = fetch,
-  now = Date.now
+  now = Date.now,
+  dailyLimit = Number(process.env.MTM_LOCATION_DAILY_LIMIT ?? 1000)
 ) {
+  if (!Number.isSafeInteger(dailyLimit) || dailyLimit < 0 || dailyLimit > 10000) throw Error("Invalid location lookup ceiling");
+  let day = "", attempts = 0;
   let nextRequest = 0,
     active = false;
   const cache = new Map<string, { postalCode: string; until: number }>();
@@ -22,7 +25,11 @@ export function createLocationLookup(
       key = lat + ":" + lon;
     const found = cache.get(key);
     if (found && found.until > now()) return { postalCode: found.postalCode };
+    const today = new Date(now()).toISOString().slice(0, 10);
+    if (day !== today) { day = today; attempts = 0; }
+    if (attempts >= dailyLimit) throw Error("BUSY");
     if (active || now() < nextRequest) throw Error("BUSY");
+    attempts++;
     active = true;
     nextRequest = now() + 1000;
     try {

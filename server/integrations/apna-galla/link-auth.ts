@@ -71,7 +71,7 @@ function payload(
     !/^\/[a-zA-Z0-9/_-]{1,199}$/.test(path) ||
     !uuid.test(requestId) ||
     !raw.length ||
-    raw.length > 65536
+    raw.length > (peer === "apna" && path === "/api/internal/apna/catalogue" ? 524288 : 65536)
   )
     throw Error("Invalid signed request");
   return Buffer.from(

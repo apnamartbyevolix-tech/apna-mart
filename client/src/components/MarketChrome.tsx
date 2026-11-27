@@ -51,6 +51,7 @@ type MarketContextValue = {
   setLocality: (value: string) => void;
   areas: RouterOutputs["marketplace"]["areas"] | undefined;
   areasLoading: boolean;
+  reloadAreas: () => unknown;
   addToCart: (product: MarketProduct, quantity?: number) => void;
   replaceCart: (items: CartLine[]) => void;
   setQuantity: (productId: number, quantity: number) => void;
@@ -245,6 +246,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       setLocality,
       areas: areasQuery.data,
       areasLoading: areasQuery.isLoading,
+      reloadAreas: areasQuery.refetch,
       addToCart,
       replaceCart,
       setQuantity,

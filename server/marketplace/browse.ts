@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
@@ -20,9 +20,11 @@ export const browseInput = z.object({
   kind: z.enum(["products", "shops"]).default("products"),
   q: z.string().trim().max(160).optional(),
   shopId: z.number().int().positive().optional(),
+  productIds: z.array(z.number().int().positive()).min(1).max(50).optional(),
   categoryId: z.number().int().positive().optional(),
   onlyStock: z.boolean().default(true),
   offersOnly: z.boolean().default(false),
+  festival: z.string().trim().max(80).optional(),
   sort: z.enum(["relevant", "low", "high"]).default("relevant"),
   limit: z.number().int().min(1).max(50).default(24),
   cursor: z
@@ -127,7 +129,9 @@ export async function browseRows(
         cursor,
         input.onlyStock ? sql`${products.stockQuantity}>0` : undefined,
         input.offersOnly ? sql`${offer} IS NOT NULL AND ${active}` : undefined,
+        input.festival ? sql`${offer}->>'festival' ILIKE ${"%" + input.festival.replace(/[\\%_]/g, "\\$&") + "%"}` : undefined,
         input.shopId ? eq(vendorProfiles.id, input.shopId) : undefined,
+        input.productIds ? inArray(products.id, input.productIds) : undefined,
         input.categoryId
           ? eq(products.categoryId, input.categoryId)
           : undefined,

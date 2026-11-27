@@ -708,6 +708,7 @@ function publicProduct(raw: typeof products.$inferSelect) {
     unit: product.unit,
     pricePaise: product.pricePaise,
     offer:activeOffer(product.offerMeta),
+    gstIncluded: Boolean(product.taxMeta && product.taxMeta.gstBps > 0),
     mrpPaise: product.mrpPaise,
     inStock: product.stockQuantity > 0,
     availability: product.availability,
@@ -923,6 +924,11 @@ export const appRouter = router({
       const options = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...options, maxAge: -1 });
       return { success: true } as const;
+    }),
+    localDemoStatus: publicProcedure.query(({ ctx }) => {
+      if (ENV.isProduction || process.env.NODE_ENV === "production" || process.env.PUBLIC_PREVIEW || !(process.env.MTM_ENABLE_DEV_AUTH === "1" || process.env.ALLOW_STANDALONE_DEV_LOGIN === "1")) return { enabled: false };
+      try { verifyIsolatedDevDatabaseUrl(process.env.DATABASE_URL); verifyLocalHostRequest(ctx.req); return { enabled: true }; }
+      catch { return { enabled: false }; }
     }),
     standaloneLogin: publicProcedure
       .input(
@@ -1670,7 +1676,7 @@ export const appRouter = router({
               eq(categories.enabled, true),
               eq(categories.regulated, false)
             )
-          );
+          ).orderBy(asc(products.id)).limit(24);
         const ratings = await shopRatingMap(db, [shop.shop.id]);
         return {
           ...withShopRating(publicShop(shop.shop, shop.zone, shop.category, shop.townName), ratings),
@@ -1815,7 +1821,7 @@ export const appRouter = router({
                 discountPaise: 0,
                 deliveryFeePaise: totals.deliveryFeePaise,
                 platformFeePaise: totals.platformFeePaise,
-                taxPaise: 0,
+                taxPaise: totals.taxPaise,
                 totalPaise: totals.totalPaise,
                 commissionPaise: totals.commissionPaise,
                 notes: input.notes ?? null,
@@ -1835,7 +1841,8 @@ export const appRouter = router({
                   unitSnapshot: i.product.unit,
                   quantity: i.quantity,
                   unitPricePaise: i.product.pricePaise,
-                  lineTotalPaise: i.product.pricePaise * i.quantity,
+                  lineTotalPaise: i.lineTotalPaise,
+                  taxSnapshot: i.taxSnapshot,
                 }))
               ).returning({ insertId: orderItems.id });
             await tx
@@ -1897,6 +1904,25 @@ export const appRouter = router({
           throw error;
         }
       }),
+    checkoutSubmission: protectedProcedure
+      .input(z.object({ key: z.string().min(8).max(100) }))
+      .query(async ({ ctx, input }) => {
+        const db = await database();
+        const [row] = await db.select({ id: orders.id }).from(orders)
+          .where(and(eq(orders.customerId, ctx.user.id), eq(orders.idempotencyKey, input.key))).limit(1);
+        return row ?? null;
+      }),
+    orderHistory: protectedProcedure
+      .input(z.object({ cursor: z.number().int().positive().nullish(), limit: z.number().int().min(1).max(50).default(20) }))
+      .query(async ({ ctx, input }) => {
+        const db = await database();
+        const rows = await db.select({ order: orders, shopName: vendorProfiles.shopName })
+          .from(orders).innerJoin(vendorProfiles, eq(orders.vendorId, vendorProfiles.id))
+          .where(and(eq(orders.customerId, ctx.user.id), input.cursor ? sql`${orders.id}<${input.cursor}` : undefined))
+          .orderBy(desc(orders.id)).limit(input.limit + 1);
+        const page = rows.slice(0, input.limit);
+        return { orders: page, nextCursor: rows.length > input.limit ? page.at(-1)!.order.id : null };
+      }),
     myOrders: protectedProcedure.query(async ({ ctx }) => {
       const db = await database();
       return db
@@ -1904,7 +1930,7 @@ export const appRouter = router({
         .from(orders)
         .innerJoin(vendorProfiles, eq(orders.vendorId, vendorProfiles.id))
         .where(eq(orders.customerId, ctx.user.id))
-        .orderBy(desc(orders.createdAt));
+        .orderBy(desc(orders.createdAt)).limit(100);
     }),
     orderDetail: protectedProcedure
       .input(z.object({ orderId: z.number().int().positive() }))
@@ -2365,6 +2391,7 @@ export const appRouter = router({
         if (!order) throw new TRPCError({ code: "NOT_FOUND" });
         return {
           order,
+          apnaSync: await orderSyncStatus(db, order.id),
           customer: {
             name: order.customerNameSnapshot,
             phone: order.customerPhoneSnapshot,

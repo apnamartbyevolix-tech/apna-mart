@@ -5,6 +5,15 @@ const response = () =>
     JSON.stringify({ address: { country_code: "in", postcode: "458226" } })
   );
 describe("optional pincode lookup", () => {
+  it("caps uncached provider attempts per process while preserving cached and manual choices", async () => {
+    let time = Date.parse("2026-11-27T00:00:00Z");
+    const send = vi.fn(async () => response()), lookup = createLocationLookup(send, () => time, 1);
+    await lookup({ latitude: 1, longitude: 1 }); time += 1000;
+    await expect(lookup({ latitude: 2, longitude: 2 })).rejects.toThrow("BUSY");
+    await expect(lookup({ latitude: 1, longitude: 1 })).resolves.toEqual({ postalCode: "458226" });
+    time += 86400000; await lookup({ latitude: 2, longitude: 2 });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
   it("rejects malformed coordinates before any provider request", async () => {
     const send = vi.fn();
     const lookup = createLocationLookup(send);

@@ -42,6 +42,14 @@ const headers = () => ({
   "idempotency-key": id,
 });
 describe("separate Ed25519 server identities", () => {
+  it("allows the bounded large catalogue only on its signed sender and path", () => {
+    const large = Buffer.alloc(100000, "x"), path = "/api/internal/apna/catalogue";
+    const h = { ...connectionHeaders("apna", "POST", path, large, id, apna, now), "idempotency-key": id };
+    expect(() => verifyConnection("apna", "POST", path, large, h, mytown, now)).not.toThrow();
+    expect(() => connectionHeaders("apna", "POST", "/api/internal/apna/vendor", large, id, apna, now)).toThrow();
+    expect(() => connectionHeaders("mytown", "POST", path, large, id, mytown, now)).toThrow();
+    expect(() => connectionHeaders("apna", "POST", path, Buffer.alloc(524289), id, apna, now)).toThrow();
+  });
   it("verifies the correct sender with only its pinned public key", () =>
     expect(() =>
       verifyConnection("mytown", "POST", path, raw, headers(), apna, now)

@@ -1,3 +1,5 @@
+import { quoteMarketplaceTax } from "../../../shared/marketplace-tax";
+import { startOrderWorker, MAX_ORDER_SYNC_ATTEMPTS, orderRetryDelay } from "../../marketplace/work-scheduler";
 /** v1.2-sandbox implementation, confined to disposable localhost databases. */
 import express, { type Express } from "express";
 import {verifyConnection} from './link-auth';
@@ -28,7 +30,7 @@ import { prepareCheckout } from "../../marketplace/checkout";
 import { provisionPublishedLocation } from "../../marketplace/published-location";
 
 export { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
-import { sandboxEnabled, productionConnector, protocolRevision, assertSandbox } from "./config";
+import { sandboxEnabled, productionConnector, protocolRevision, legacyRevision, catalogueV2, assertSandbox } from "./config";
 import { publicCatalogueImage } from "./public-media";
 const rows = async (db: any, q: any): Promise<any[]> => {
   const r = await db.execute(q);
@@ -57,8 +59,8 @@ function transport() {
   });
 }
 const wire = (op: Operation, b: any, key: string) =>
-  transport().post(op, { ...b, revision: protocolRevision() }, key,
-    op === "verifyMerchant" ? { maxAttempts: 1, timeoutMs: 2500 } : undefined);
+  transport().post(op, { ...b, revision: b.revision || legacyRevision() }, key,
+    { maxAttempts: 1, timeoutMs: op === "verifyMerchant" ? 2500 : 4000 });
 const unavailable = () =>
   new TRPCError({
     code: "PRECONDITION_FAILED",
@@ -66,7 +68,7 @@ const unavailable = () =>
       "The shop connection could not be confirmed. Your existing orders are safe. Try again shortly.",
   });
 async function verify(merchantId: string) {
-  const v: any = await wire("verifyMerchant", { merchantId }, randomUUID());
+  const v: any = await wire("verifyMerchant", { merchantId, revision: protocolRevision() }, randomUUID());
   if (
     v?.isValid !== true ||
     v.currency !== "INR" ||
@@ -83,7 +85,7 @@ async function verify(merchantId: string) {
 
 export const catalogueSchema = z
   .object({
-    revision: z.enum(["1.2-sandbox", "1.2"]),
+    revision: z.enum(["1.2-sandbox", "1.2", "2.0-sandbox", "2.0"]),
     merchantId: z.string().uuid(),
     version: z.number().int().positive(),
     live: z.boolean(),
@@ -101,6 +103,7 @@ export const catalogueSchema = z
       .array(
         z
           .object({
+            tax: z.object({ schema: z.literal(1), netUnitPaise: z.number().int().positive().max(100000000), offerNetUnitPaise: z.number().int().positive().max(100000000).nullable(), gstBps: z.number().int().min(0).max(10000), hsn: z.string().max(30).nullable() }).strict().optional(),
             imageUrl:z.string().max(350).nullable().optional(),
             sku: z.string().min(1).max(100),
             name: z.string().min(1).max(180),
@@ -111,9 +114,45 @@ export const catalogueSchema = z
           })
           .strict()
       )
-      .max(30),
+      .max(500),
   })
-  .strict();
+  .strict().superRefine((value, ctx) => {
+    const v2 = value.revision.startsWith("2.0");
+    if (!v2 && value.items.length > 30) ctx.addIssue({ code: "custom", message: "Legacy catalogue is limited to 30 products" });
+    for (const item of value.items) {
+      if (!v2 && item.tax || v2 && !item.tax) { ctx.addIssue({ code: "custom", message: "Tax snapshot does not match protocol revision" }); continue; }
+      if (!item.tax) continue;
+      try {
+        const net = item.offer ? item.tax.offerNetUnitPaise : item.tax.netUnitPaise;
+        if (!net || quoteMarketplaceTax(net, item.tax.gstBps, 1).totalPaise !== item.pricePaise ||
+          (item.offer && (quoteMarketplaceTax(item.tax.netUnitPaise, item.tax.gstBps, 1).totalPaise !== item.offer.referencePricePaise || item.offer.pricePaise !== item.pricePaise)) ||
+          (!item.offer && item.tax.offerNetUnitPaise !== null)) throw Error();
+      } catch { ctx.addIssue({ code: "custom", message: "Tax-inclusive prices do not match the signed snapshot" }); }
+    }
+  });
+/** One atomic catalogue replacement with bounded SQL round trips, retaining published IDs. */
+export async function writeCatalogueProducts(tx: any, vendorId: number, merchantId: string, items: z.infer<typeof catalogueSchema>["items"], production: boolean) {
+  await tx.update(products).set({ availability: "archived" }).where(eq(products.vendorId, vendorId));
+  if (!items.length) return;
+  const prior = await rows(tx, sql`SELECT m.sku,m.product_id,p.slug,p."imageUrl",p."categoryId" FROM apna_products m JOIN products p ON p.id=m.product_id WHERE m.vendor_id=${vendorId} AND m.sku IN (${sql.join(items.map(item => sql`${item.sku}`), sql`,`)})`);
+  const [shop] = await tx.select({ categoryId: vendorProfiles.categoryId }).from(vendorProfiles).where(eq(vendorProfiles.id, vendorId));
+  if (!shop) throw Error("Publication shop unavailable");
+  const values = items.map(item => {
+    const old = prior.find(row => row.sku === item.sku);
+    return { vendorId, categoryId: old?.categoryId || shop.categoryId,
+      slug: old?.slug || "apna-" + createHash("sha256").update(item.sku).digest("hex").slice(0,24),
+      name: item.name, unit: item.unit, pricePaise: item.pricePaise, stockQuantity: item.quantity,
+      offerMeta: item.offer || null, taxMeta: item.tax || null,
+      imageUrl: item.imageUrl === undefined ? (old?.imageUrl || null) : publicCatalogueImage(item.imageUrl, merchantId),
+      availability: "available", isDemo: !production };
+  });
+  const stored = await tx.insert(products).values(values).onConflictDoUpdate({ target: [products.vendorId, products.slug], set: {
+    name: sql`excluded.name`, unit: sql`excluded.unit`, pricePaise: sql`excluded."pricePaise"`, stockQuantity: sql`excluded."stockQuantity"`,
+    offerMeta: sql`excluded."offerMeta"`, taxMeta: sql`excluded."taxMeta"`, imageUrl: sql`excluded."imageUrl"`, availability: "available", isDemo: !production,
+  } }).returning({ id: products.id, slug: products.slug });
+  const mappings = items.flatMap((item, index) => prior.some(row => row.sku === item.sku) ? [] : [sql`(${stored.find((row: any) => row.slug === values[index].slug)!.id},${vendorId},${item.sku})`]);
+  if (mappings.length) await tx.execute(sql`INSERT INTO apna_products(product_id,vendor_id,sku) VALUES ${sql.join(mappings, sql`,`)}`);
+}
 type EligibilityScope = { townId?: number; zoneId?: number; vendorId?: number };
 const eligibilityChecks = new Map<string, { until: number; pending?: Promise<void> }>();
 export async function refreshLinkedEligibility(scope: EligibilityScope = {}) {
@@ -174,7 +213,7 @@ export function registerApnaSandbox(app: Express) {
   assertSandbox();
   app.post(
     "/api/internal/apna/catalogue",
-    express.raw({ type: "application/json", limit: "64kb" }),
+    express.raw({ type: "application/json", limit: catalogueV2() ? "512kb" : "64kb" }),
     async (req, res) => {
       try {
         const raw = req.body as Buffer,
@@ -187,7 +226,7 @@ export function registerApnaSandbox(app: Express) {
           timingSafeEqual(Buffer.from(a), Buffer.from(b));
         if (
           !Buffer.isBuffer(raw) ||
-          raw.length > 65536 ||
+          raw.length > (catalogueV2() ? 524288 : 65536) ||
           !/^\d{10}$/.test(ts) ||
           Math.abs(Date.now() / 1000 - Number(ts)) > 120 ||
           !equal(key, process.env.APNA_SANDBOX_KEY!) ||
@@ -206,7 +245,7 @@ export function registerApnaSandbox(app: Express) {
         }
         try{verifyConnection('apna',req.method,req.originalUrl,raw,req.headers);}catch{res.status(401).json({message:'Invalid server signature'});return;}
         const b = catalogueSchema.parse(JSON.parse(raw.toString("utf8")));
-        if(b.revision!==protocolRevision()) throw Error("Connector revision does not match this deployment");
+        if(b.revision!==protocolRevision() && b.revision!==legacyRevision()) throw Error("Connector revision does not match this deployment");
         if(productionConnector() && b.live && (!b.shop.city||!b.shop.state||!b.shop.address)) throw Error("A real public shop address is required");
         if (new Set(b.items.map(i => i.sku)).size !== b.items.length)
           throw Error("Duplicate SKU");
@@ -282,53 +321,7 @@ export function registerApnaSandbox(app: Express) {
               isOpen: b.live&&withinShopHours(hours?.settings),
             })
             .where(eq(vendorProfiles.id, vendorId));
-          await tx
-            .update(products)
-            .set({ availability: "archived" })
-            .where(eq(products.vendorId, vendorId));
-          for (const i of b.items) {
-            const p = (
-              await rows(
-                tx,
-                sql`SELECT * FROM apna_products WHERE vendor_id=${vendorId} AND sku=${i.sku}`
-              )
-            )[0];
-            let productId = p?.product_id;
-            const values = {
-              name: i.name,
-              ...(i.imageUrl!==undefined?{imageUrl:publicCatalogueImage(i.imageUrl,b.merchantId)}:{}),
-              unit: i.unit,
-              pricePaise: i.pricePaise,
-              offerMeta:i.offer||null,
-              stockQuantity: i.quantity,
-              availability: "available" as const,
-            };
-            if (productId)
-              await tx
-                .update(products)
-                .set(values)
-                .where(eq(products.id, productId));
-            else {
-              const inserted = await tx
-                .insert(products)
-                .values({
-                  ...values,
-                  vendorId,
-                  categoryId,
-                  slug:
-                    "apna-" +
-                    createHash("sha256")
-                      .update(i.sku)
-                      .digest("hex")
-                      .slice(0, 24),
-                  isDemo: !productionConnector(),
-                }).returning({ insertId: products.id });
-              productId = Number(inserted[0].insertId);
-              await tx.execute(
-                sql`INSERT INTO apna_products(product_id,vendor_id,sku) VALUES(${productId},${vendorId},${i.sku})`
-              );
-            }
-          }
+          await writeCatalogueProducts(tx, vendorId, b.merchantId, b.items, productionConnector());
           await tx.execute(
             sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${b.merchantId},${vendorId},${b.version},${b.live},${new Date(b.eligibility.expiresAt)},now()) ON CONFLICT (merchant_id) DO UPDATE SET version=EXCLUDED.version,live=EXCLUDED.live,expires_at=EXCLUDED.expires_at,verified_at=now()`
           );
@@ -344,24 +337,19 @@ export function registerApnaSandbox(app: Express) {
       }
     }
   );
-  let pumping = false;
-  const timer = setInterval(async () => {
-    if (pumping) return;
-    pumping = true;
-    try {
-      await relayApnaOutbox();
-    } catch {
-    } finally {
-      pumping = false;
-    }
-  }, 2000);
-  timer.unref();
+  return startOrderWorker(async () => {
+    const count = await relayApnaOutbox();
+    const db = await getDb();
+    const due = db ? await rows(db, sql`SELECT min(next_at) AS at FROM apna_outbox WHERE NOT done AND attempts<${MAX_ORDER_SYNC_ATTEMPTS} AND next_at>now()`) : [];
+    return { count, nextAt: due[0]?.at ? new Date(due[0].at).getTime() : undefined };
+  });
 }
 
 export type CheckoutHold = {
   reference: string;
   merchantId: string;
   reservationId: string;
+  revision?: string;
 };
 export async function trustedCheckoutStock(
   db: any,
@@ -408,7 +396,7 @@ export async function orderSyncStatus(db: any, id: number) {
   );
   return {
     state: c.state,
-    pending: c.state === "HOLD",
+    pending: errors.length > 0,
     message: errors[0]?.last_error || null,
   };
 }
@@ -459,10 +447,11 @@ export async function reserveForCheckout(
         sku: m.sku,
         quantity: i.quantity,
         pricePaise: i.product.pricePaise,
+        ...(i.product.taxMeta ? { tax: i.product.taxMeta } : {}),
       };
     })
     .sort((a: any, b: any) => a.sku.localeCompare(b.sku));
-  const body = { merchantId: l.merchant_id, reference, items };
+  const body = { merchantId: l.merchant_id, reference, items, revision: protocolRevision() };
   const candidate = randomUUID();
   await db.execute(
     sql`INSERT INTO apna_checkouts(reference,merchant_id,vendor_id,request_key,body) VALUES(${reference},${l.merchant_id},${input.shopId},${candidate},${JSON.stringify(body)}) ON CONFLICT DO NOTHING`
@@ -495,6 +484,7 @@ export async function reserveForCheckout(
     reference,
     merchantId: l.merchant_id,
     reservationId: result.reservationId,
+    revision: decode(row.body).revision || legacyRevision(),
   };
 }
 export async function attachCheckout(
@@ -508,6 +498,7 @@ export async function attachCheckout(
     sql`UPDATE apna_checkouts SET order_id=${orderId} WHERE reference=${hold.reference} AND order_id IS NULL`
   );
   const body = {
+    revision: hold.revision || legacyRevision(),
     merchantId: hold.merchantId,
     reservationId: hold.reservationId,
     orderNumber,
@@ -517,20 +508,20 @@ export async function attachCheckout(
   );
 }
 export async function relayApnaOutbox() {
-  if (!sandboxEnabled()) return;
+  if (!sandboxEnabled()) return 0;
   assertSandbox();
   const db = await getDb();
-  if (!db) return;
+  if (!db) return 0;
   const pending = await rows(
     db,
-    sql`SELECT id FROM apna_outbox WHERE NOT done AND next_at<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY id LIMIT 8`
+    sql`SELECT id FROM apna_outbox WHERE NOT done AND attempts<${MAX_ORDER_SYNC_ATTEMPTS} AND next_at<=now() AND (lease_until IS NULL OR lease_until<now()) AND (operation<>'sale' OR EXISTS(SELECT 1 FROM apna_checkouts c WHERE c.order_id=apna_outbox.order_id AND c.state<>'HOLD')) ORDER BY id LIMIT 8`
   );
   for (const candidate of pending) {
     const row = await db.transaction(async tx => {
       const r = (
         await rows(
           tx,
-          sql`SELECT * FROM apna_outbox WHERE id=${candidate.id} AND NOT done AND (lease_until IS NULL OR lease_until<now()) FOR UPDATE`
+          sql`SELECT * FROM apna_outbox WHERE id=${candidate.id} AND NOT done AND attempts<${MAX_ORDER_SYNC_ATTEMPTS} AND (lease_until IS NULL OR lease_until<now()) FOR UPDATE`
         )
       )[0];
       if (!r) return;
@@ -557,6 +548,7 @@ export async function relayApnaOutbox() {
       const response = decode(checkout.response);
       let operation = r.operation;
       let body = decode(r.body) || {
+        revision: decode(checkout.body)?.revision || legacyRevision(),
         merchantId: checkout.merchant_id,
         reservationId: response.reservationId,
         orderNumber: o.orderNumber,
@@ -568,7 +560,7 @@ export async function relayApnaOutbox() {
           .where(eq(paymentRecords.orderId, o.id));
         if (p?.collectedAmountPaise !== o.totalPaise) {
           await tx.execute(
-            sql`UPDATE apna_outbox SET last_error='Cash collection needs reconciliation',next_at=(now() + INTERVAL '10 SECOND') WHERE id=${r.id}`
+            sql`UPDATE apna_outbox SET last_error='Cash collection needs reconciliation',attempts=${MAX_ORDER_SYNC_ATTEMPTS} WHERE id=${r.id}`
           );
           return;
         }
@@ -630,8 +622,9 @@ export async function relayApnaOutbox() {
       });
     } catch {
       await db.execute(
-        sql`UPDATE apna_outbox SET attempts=attempts+1,last_error='Apna confirmation pending; retry is safe',next_at=(now() + INTERVAL '10 SECOND'),lease_until=NULL WHERE id=${row.id}`
+        sql`UPDATE apna_outbox SET attempts=attempts+1,last_error='Apna confirmation pending; retry is safe',next_at=now()+(${orderRetryDelay(Number(row.attempts))} * interval '1 millisecond'),lease_until=NULL WHERE id=${row.id}`
       );
     }
   }
+  return pending.length;
 }

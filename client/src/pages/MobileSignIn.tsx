@@ -126,7 +126,7 @@ export default function MobileSignIn() {
     existing = false
   ) => (
     <label>
-      {label}
+      {t(label)}
       <input
         required
         type="password"
@@ -147,6 +147,7 @@ export default function MobileSignIn() {
         <input
           required
           type="tel"
+          aria-label={t("Mobile number")}
           inputMode="tel"
           autoComplete="tel-national"
           placeholder={t("Enter mobile number")}
@@ -199,19 +200,19 @@ export default function MobileSignIn() {
         </div>
         <h2>
           {mode === "pin"
-            ? "Welcome back."
+            ? t("Welcome back.")
             : mode === "reset"
-              ? "Reset your PIN."
-              : "Your local shops, one account."}
+              ? t("Reset your PIN.")
+              : t("Your local shops, one account.")}
         </h2>
         <p>
           {mode === "pin"
-            ? "Enter your mobile number and the four-digit PIN you chose."
+            ? t("Enter your mobile number and the four-digit PIN you chose.")
             : challenge
               ? "Enter the OTP sent to " +
                 challenge.phoneHint +
                 " and choose your four-digit login PIN."
-              : "Verify your mobile number once by OTP, then use your PIN for future sign-ins."}
+              : t("Verify your mobile number once by OTP, then use your PIN for future sign-ins.")}
         </p>
         {status.deliveryMode === "local-preview" && (
           <div className="mobile-auth-preview">
@@ -226,7 +227,7 @@ export default function MobileSignIn() {
               className="mobile-auth-primary"
               disabled={busy || phone.length !== 10 || pin.length !== 4}
             >
-              {busy ? "Signing in…" : t("Sign in")}
+              {busy ? t("Signing in…") : t("Sign in")}
               <ArrowRight size={17} />
             </button>
             <div className="mobile-auth-actions">
@@ -281,10 +282,10 @@ export default function MobileSignIn() {
               }
             >
               {busy
-                ? "Verifying…"
+                ? t("Verifying…")
                 : mode === "reset"
-                  ? "Verify & reset PIN"
-                  : "Verify & continue"}
+                  ? t("Verify & reset PIN")
+                  : t("Verify & continue")}
               <ArrowRight size={17} />
             </button>
             <div className="mobile-auth-actions">
@@ -305,7 +306,7 @@ export default function MobileSignIn() {
                 disabled={busy || wait > 0}
                 onClick={requestCode}
               >
-                {wait ? "Resend in " + wait + "s" : "Resend OTP"}
+                {wait ? "Resend in " + wait + "s" : t("Resend OTP")}
               </button>
             </div>
           </form>
@@ -322,10 +323,10 @@ export default function MobileSignIn() {
               disabled={busy || phone.length !== 10 || wait > 0}
             >
               {busy
-                ? "Requesting OTP…"
+                ? t("Requesting OTP…")
                 : wait
                   ? "Try again in " + wait + "s"
-                  : "Send verification OTP"}
+                  : t("Send verification OTP")}
               <ArrowRight size={17} />
             </button>
           </form>

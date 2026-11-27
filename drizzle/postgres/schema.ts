@@ -1,3 +1,4 @@
+import type { MarketplaceTax } from "../../shared/marketplace-tax";
 // PostgreSQL migration candidate. Runtime cutover is gated on full workflow verification.
 import type {PublicOffer} from "../../shared/offers";
 import {sql} from "drizzle-orm";
@@ -217,6 +218,7 @@ export const products = pgTable(
     unit: varchar("unit", { length: 48 }).notNull(),
     pricePaise: int("pricePaise").notNull(),
     offerMeta:json("offerMeta").$type<PublicOffer|null>(),
+    taxMeta: json("taxMeta").$type<MarketplaceTax | null>(),
     mrpPaise: int("mrpPaise"),
     stockQuantity: int("stockQuantity").notNull().default(0),
     availability: enum_484699e14b7b("availability")
@@ -348,6 +350,7 @@ export const orderItems = pgTable(
     restockedQuantity: int("restockedQuantity").notNull().default(0),
     damagedQuantity: int("damagedQuantity").notNull().default(0),
     missingQuantity: int("missingQuantity").notNull().default(0),
+    taxSnapshot: json("taxSnapshot").$type<Record<string, unknown> | null>(),
     unitPricePaise: int("unitPricePaise").notNull(),
     lineTotalPaise: int("lineTotalPaise").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -1,7 +1,8 @@
 import type { PublicOffer } from "@shared/offers";
-import type { inferRouterOutputs } from "@trpc/server";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 
+export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type HomeOutput = RouterOutputs["marketplace"]["home"];
 export type ShopOutput = RouterOutputs["marketplace"]["shop"];
@@ -28,6 +29,7 @@ export type MarketShop = {
   ratingCount: number;
 };
 export type MarketProduct = {
+  gstIncluded?: boolean;
   offer?: PublicOffer | null;
   shopName?: string;
   id: number;
@@ -101,6 +103,7 @@ export function toMarketProduct(
     unit: product.unit,
     pricePaise: product.pricePaise,
     offer: product.offer || null,
+    gstIncluded: product.gstIncluded,
     shopName: product.shopName,
     mrpPaise: product.mrpPaise,
     image: product.imageUrl || assetFallback,

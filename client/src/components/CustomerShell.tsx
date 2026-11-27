@@ -1,3 +1,4 @@
+import { useConnectivity } from "@/lib/connectivity";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -26,6 +27,7 @@ import { formatINR } from "@/lib/marketplace";
 
 export function CustomerShell({ children }: { children: ReactNode }) {
   const market = useMarket();
+  const online = useConnectivity();
   const { t } = useLanguage();
   const [location, navigate] = useLocation();
   const [areaOpen, setAreaOpen] = useState(false),
@@ -203,7 +205,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               }}
               placeholder={t("Search products or shops")}
               aria-label={t("Search products or shops")}
-              maxLength={200}
+              maxLength={160}
             />
             <button aria-label={t("Search")} type="submit">
               <ArrowRight size={19} />
@@ -255,6 +257,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         className="page-content"
         onClick={() => setSearchOpen(false)}
       >
+        {!online && <div className="mart-offline" role="status">{t("You are offline. Reconnect to refresh prices and place an order.")}</div>}
         {market.cartNotice && (
           <div className="cart-storage-notice" role="status">
             {t(market.cartNotice)}
@@ -345,9 +348,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             {market.areasLoading ? (
               <p role="status">{t("Loading service areas…")}</p>
             ) : !market.areas ? (
-              <p role="status">
-                {t("Service areas could not be loaded. Please try again.")}
-              </p>
+              <div role="status"><p>{t("Service areas could not be loaded. Please try again.")}</p><button onClick={() => void market.reloadAreas()}>{t("Try again")}</button></div>
             ) : areas.length ? (
               areas.map(({ zone, town }) => (
                 <button
@@ -382,7 +383,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             )}
           </div>
           <small className="mart-location-attribution">
-            Location lookup © OpenStreetMap contributors. Confirm the area
+            Location lookup © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Confirm the area
             before shopping.
           </small>
         </DialogContent>

@@ -4,7 +4,9 @@ import { validateLinkAuth } from "./link-auth";
 export const sandboxEnabled = () =>
   !isReviewDemo() && (process.env.MTM_APNA_SANDBOX_ENABLED === "1" || process.env.MTM_APNA_CONNECTOR_MODE === "production");
 export const productionConnector = () => process.env.MTM_APNA_CONNECTOR_MODE === "production";
-export const protocolRevision = () => productionConnector() ? "1.2" : "1.2-sandbox";
+export const catalogueV2 = () => process.env.MTM_APNA_CATALOGUE_V2 === "1";
+export const legacyRevision = () => productionConnector() ? "1.2" : "1.2-sandbox";
+export const protocolRevision = () => catalogueV2() ? (productionConnector() ? "2.0" : "2.0-sandbox") : legacyRevision();
 export function assertSandbox() {
   validateLinkAuth();
   const u = new URL(process.env.DATABASE_URL || "");

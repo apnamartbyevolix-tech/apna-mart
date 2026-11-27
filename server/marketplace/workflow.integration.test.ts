@@ -1,8 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { retryOrderSync } from "./retry-order-sync";
+import { relayApnaOutbox, writeCatalogueProducts } from "../integrations/apna-galla/sandbox";
+import { SignedSandboxTransport } from "../integrations/apna-galla/transport";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { publishedSellerCondition, publishedProductCondition } from "./publication-policy";
 import { prepareCheckout } from "./checkout";
+import { reserveSmsBudget } from "../auth/sms-budget";
 import { provisionPublishedLocation } from "./published-location";
 import { appRouter } from "../routers";
 import { getDb, upsertUser } from "../db";
@@ -132,6 +136,125 @@ const workflow = describe.skipIf(!integrationEnabled)(
       const quote = await who.marketplace.quoteOrder(input);
       return who.marketplace.placeOrder({ ...input, quoteFingerprint: quote.quoteFingerprint });
     }
+
+    it("reserves a shared SMS ceiling atomically across concurrent requests", async () => {
+      const prefix = `budget_${randomUUID()}_`;
+      const env = { MTM_SMS_DAILY_LIMIT: "3", MTM_SMS_MONTHLY_LIMIT: "5" };
+      const now = new Date("2026-11-27T05:00:00Z");
+      const keyFor = (key: string) => createHash("sha256").update(prefix + key).digest("hex");
+      const buckets = [keyFor("sms-budget:day:2026-11-27"), keyFor("sms-budget:day:2026-11-28"), keyFor("sms-budget:month:2026-11")];
+      const reserve = (at: Date) => db.transaction(tx => reserveSmsBudget(tx, keyFor, at, env));
+      try {
+        const day = await Promise.all(Array.from({ length: 12 }, () => reserve(now)));
+        expect(day.filter(Boolean)).toHaveLength(3);
+        const nextDay = await Promise.all(Array.from({ length: 8 }, () => reserve(new Date("2026-11-28T05:00:00Z"))));
+        expect(nextDay.filter(Boolean)).toHaveLength(2);
+        const result = await db.execute(sql`SELECT hits FROM customer_auth_limits WHERE bucket IN (${buckets[0]},${buckets[1]},${buckets[2]}) ORDER BY hits`);
+        expect(result.rows.map(row => row.hits)).toEqual([2, 3, 5]);
+      } finally {
+        await db.execute(sql`DELETE FROM customer_auth_limits WHERE bucket IN (${buckets[0]},${buckets[1]},${buckets[2]})`);
+      }
+    });
+
+    it("recovers only an owned failed order and retains its original request identity", async () => {
+      const placed = await createOrder();
+      const key = randomUUID(), body = { reservationId: randomUUID(), orderNumber: "test-stored-body" };
+      const inserted = await db.execute(sql`INSERT INTO apna_outbox(order_id,operation,request_key,body,attempts,last_error) VALUES(${placed.orderId},'commit',${key},${JSON.stringify(body)},8,'Connection unavailable') RETURNING id`);
+      const id = inserted.rows[0].id;
+      try {
+        await expect(db.transaction(tx => retryOrderSync(tx, placed.orderId, shopId + 100000))).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const result = await db.transaction(tx => retryOrderSync(tx, placed.orderId, shopId));
+        expect(result).toEqual({ queued: true });
+        const row = (await db.execute(sql`SELECT * FROM apna_outbox WHERE id=${id}`)).rows[0];
+        expect(row.attempts).toBe(0); expect(row.request_key).toBe(key); expect(row.body).toEqual(body);
+        expect(await db.transaction(tx => retryOrderSync(tx, placed.orderId, shopId))).toEqual({ queued: false });
+      } finally { await db.execute(sql`DELETE FROM apna_outbox WHERE id=${id}`); }
+    });
+
+    it("pages private order history and finds only the caller's lost checkout submission", async () => {
+      const placed = await createOrder();
+      const row = (await db.select().from(orders).where(eq(orders.id, placed.orderId)))[0];
+      expect(await caller(customer).marketplace.checkoutSubmission({ key: row.idempotencyKey })).toEqual({ id: row.id });
+      expect(await caller(vendorUser).marketplace.checkoutSubmission({ key: row.idempotencyKey })).toBeNull();
+      const history = await caller(customer).marketplace.orderHistory({ limit: 1 });
+      expect(history.orders).toHaveLength(1);
+      expect(history.orders[0].order.customerId).toBe(customer.id);
+      if (history.nextCursor) {
+        const next = await caller(customer).marketplace.orderHistory({ cursor: history.nextCursor, limit: 1 });
+        expect(next.orders.every(item => item.order.id < history.nextCursor! && item.order.customerId === customer.id)).toBe(true);
+      }
+      await expect(caller(null).marketplace.orderHistory({})).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    });
+
+    it("keeps accepted GST per-line rounding and tax snapshots stable across catalogue changes", async () => {
+      const fixture = await catalogFixture();
+      const tax = { schema: 1 as const, netUnitPaise: 3, offerNetUnitPaise: null, gstBps: 500, hsn: "FICTITIOUS" };
+      await db.update(products).set({ pricePaise: 3, stockQuantity: 200, taxMeta: tax }).where(eq(products.id, fixture.productId));
+      const input = { ...fixture.scope, shopId: fixture.shopId, idempotencyKey: `gst_${randomUUID()}`, items: [{ productId: fixture.productId, quantity: 100 }], fulfillmentType: "pickup" as const, paymentMethod: "pickup" as const };
+      const api = caller(customer).marketplace;
+      const quote = await api.quoteOrder(input);
+      expect(quote.items[0].lineTotalPaise).toBe(315);
+      expect(quote.totals).toMatchObject({ subtotalPaise: 315, taxPaise: 15, totalPaise: 315 });
+      const order = await api.placeOrder({ ...input, quoteFingerprint: quote.quoteFingerprint });
+      const detail = await api.orderDetail({ orderId: order.orderId });
+      expect(detail.order.taxPaise).toBe(15); expect(detail.items[0].lineTotalPaise).toBe(315);
+      expect(detail.items[0].taxSnapshot).toMatchObject({ gstBps: 500, taxablePaise: 300, taxPaise: 15, totalPaise: 315 });
+      await db.update(products).set({ taxMeta: { ...tax, gstBps: 1000 } }).where(eq(products.id, fixture.productId));
+      const replay = await api.placeOrder({ ...input, quoteFingerprint: quote.quoteFingerprint });
+      expect(replay.orderId).toBe(order.orderId);
+      const changed = { ...input, idempotencyKey: `gst_change_${randomUUID()}` };
+      await expect(api.placeOrder({ ...changed, quoteFingerprint: quote.quoteFingerprint })).rejects.toMatchObject({ code: "CONFLICT" });
+      expect((await api.orderDetail({ orderId: order.orderId })).order.totalPaise).toBe(315);
+    });
+
+    it("stops automatic order dispatch after eight failures and resumes the identical owned request", async () => {
+      const { fixture, input } = await quotedFixture();
+      const order = await caller(customer).marketplace.placeOrder(input);
+      const merchant = randomUUID(), key = randomUUID(), reference = randomUUID(), reservationId = randomUUID();
+      const body = { merchantId: merchant, reservationId, orderNumber: "MTM-ISOLATED-RETRY", revision: "1.2-sandbox" };
+      await db.execute(sql`INSERT INTO apna_links(merchant_id,vendor_id,version,live,expires_at,verified_at) VALUES(${merchant},${fixture.shopId},1,true,now()+interval '1 day',now())`);
+      await db.execute(sql`INSERT INTO apna_checkouts(reference,merchant_id,vendor_id,request_key,body,response,order_id,state) VALUES(${reference},${merchant},${fixture.shopId},${key},${JSON.stringify(body)},${JSON.stringify({ reservationId })},${order.orderId},'HOLD')`);
+      await db.execute(sql`INSERT INTO apna_outbox(order_id,operation,request_key,body) VALUES(${order.orderId},'commit',${key},${JSON.stringify(body)}),(${order.orderId},'sale',${randomUUID()},${JSON.stringify(body)})`);
+      const post = vi.spyOn(SignedSandboxTransport.prototype, "post").mockRejectedValue(Error("Isolated simulated peer outage"));
+      vi.stubEnv("MTM_APNA_SANDBOX_ENABLED", "1"); vi.stubEnv("HOST", "127.0.0.1"); vi.stubEnv("APNA_SANDBOX_URL", "https://localhost:8465/"); vi.stubEnv("APNA_SANDBOX_KEY", "fixture-key-".repeat(6)); vi.stubEnv("APNA_SANDBOX_SECRET", "fixture-secret-".repeat(6));
+      try {
+        for (let attempt = 1; attempt <= 8; attempt++) {
+          await db.execute(sql`UPDATE apna_outbox SET next_at=now() WHERE order_id=${order.orderId}`);
+          expect(await relayApnaOutbox()).toBe(1);
+          const row = (await db.execute(sql`SELECT attempts FROM apna_outbox WHERE order_id=${order.orderId} AND operation='commit'`)).rows[0];
+          expect(row.attempts).toBe(attempt);
+        }
+        await db.execute(sql`UPDATE apna_outbox SET next_at=now() WHERE order_id=${order.orderId}`);
+        expect(await relayApnaOutbox()).toBe(0); expect(post).toHaveBeenCalledTimes(8);
+        expect(await db.transaction(tx => retryOrderSync(tx, order.orderId, fixture.shopId))).toEqual({ queued: true });
+        post.mockResolvedValue({ success: true }); await relayApnaOutbox();
+        expect(post.mock.calls.every(call => call[2] === key && call[1].reservationId === reservationId)).toBe(true);
+        expect((await db.execute(sql`SELECT state FROM apna_checkouts WHERE order_id=${order.orderId}`)).rows[0].state).toBe("COMMITTED");
+      } finally {
+        post.mockRestore(); vi.unstubAllEnvs();
+        await db.execute(sql`DELETE FROM apna_outbox WHERE order_id=${order.orderId}`);
+        await db.execute(sql`DELETE FROM apna_checkouts WHERE reference=${reference}`);
+        await db.execute(sql`DELETE FROM apna_links WHERE merchant_id=${merchant}`);
+      }
+    });
+
+    it("replaces a 500-item catalogue atomically without changing existing published IDs", async () => {
+      const fixture = await catalogFixture(), merchant = randomUUID();
+      const items = Array.from({ length: 500 }, (_, index) => ({ sku: `bulk-${index}`, name: `Fictional bulk item ${index}`, unit: "pc", pricePaise: 118, quantity: 10, tax: { schema: 1 as const, netUnitPaise: 100, offerNetUnitPaise: null, gstBps: 1800, hsn: "TEST" } }));
+      await db.transaction(tx => writeCatalogueProducts(tx, fixture.shopId, merchant, items, false));
+      const before = await db.execute(sql`SELECT sku,product_id FROM apna_products WHERE vendor_id=${fixture.shopId} ORDER BY sku`);
+      expect(before.rows).toHaveLength(500);
+      const tailId = Number(before.rows.at(-1)!.product_id);
+      const reordered = await caller(null).marketplace.browse({ ...fixture.scope, shopId: fixture.shopId, productIds: [tailId], limit: 50 });
+      expect(reordered.products.map(product => product.id)).toEqual([tailId]);
+      await db.transaction(tx => writeCatalogueProducts(tx, fixture.shopId, merchant, items.map(item => ({ ...item, quantity: 9 })), false));
+      const after = await db.execute(sql`SELECT sku,product_id FROM apna_products WHERE vendor_id=${fixture.shopId} ORDER BY sku`);
+      expect(after.rows).toEqual(before.rows);
+      await expect(db.transaction(tx => writeCatalogueProducts(tx, fixture.shopId, merchant, [{ ...items[0], name: "x".repeat(181) }], false))).rejects.toThrow();
+      expect((await db.select().from(products).where(and(eq(products.vendorId, fixture.shopId), eq(products.availability, "available"))))).toHaveLength(500);
+      await db.transaction(tx => writeCatalogueProducts(tx, fixture.shopId, merchant, [], false));
+      expect((await db.select().from(products).where(and(eq(products.vendorId, fixture.shopId), eq(products.availability, "available"))))).toHaveLength(0);
+    });
 
     async function catalogFixture() {
       const suffix = randomUUID();
