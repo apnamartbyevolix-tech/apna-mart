@@ -6,6 +6,12 @@ export const languageNames: Record<MarketLanguage, string> = {
 };
 export const languageKey = "apna-mart-language-v1";
 const messages: Record<string, [string, string]> = {
+  "Check availability": ["उपलब्धता देखें", "Availability dekhein"],
+  "Your neighbourhood, your market": ["आपका मोहल्ला, आपका बाज़ार", "Aapka mohalla, aapka bazaar"],
+  "We don’t serve this area yet": ["अभी इस इलाके में सेवा उपलब्ध नहीं है", "Abhi is area mein service nahi hai"],
+  "There are no active service areas for this pincode right now. Choose another area to explore its local shops.": ["अभी इस पिनकोड में कोई सक्रिय सेवा क्षेत्र नहीं है। स्थानीय दुकानें देखने के लिए दूसरा इलाका चुनें।", "Abhi is pincode mein active service area nahi hai. Local shops dekhne ke liye doosra area chunein."],
+  "Choose another area": ["दूसरा इलाका चुनें", "Doosra area chunein"],
+  "Shop availability is checked when you place an order.": ["ऑर्डर देते समय दुकान की उपलब्धता जाँची जाती है।", "Order dete waqt shop ki availability check hoti hai."],
   "You are offline. Reconnect to refresh prices and place an order.": ["इंटरनेट बंद है। नए दाम देखने और ऑर्डर देने के लिए फिर जुड़ें।", "Internet band hai. Naye daam aur order ke liye phir connect karein."],
   "Reconnect to place order": ["ऑर्डर के लिए इंटरनेट जोड़ें", "Order ke liye internet jodein"],
   "GST included": ["जीएसटी शामिल", "GST shaamil"],

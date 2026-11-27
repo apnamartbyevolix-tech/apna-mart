@@ -3,35 +3,22 @@
 .startup-card{width:min(100%,420px);text-align:center;padding:20px 0;margin:auto 0;flex-shrink:0}
 .startup-brand{display:flex;justify-content:center;align-items:center;gap:12px;font-size:24px;font-weight:750;letter-spacing:-.5px}
 .startup-brand img{width:44px;height:44px;object-fit:contain}
-.startup-orbit{width:76px;height:76px;margin:32px auto 24px;border:2px solid #d8e6df;border-top-color:#123d36;border-radius:50%;animation:startup-turn 2s linear infinite;display:grid;place-items:center}
-.startup-orbit span{width:28px;height:28px;background:#f4b544;border-radius:9px;transform:rotate(25deg)}
 #mart-startup h1{font-family:inherit;font-size:clamp(24px,6vw,32px);letter-spacing:-.8px;line-height:1.2;margin:0 0 12px}
 #startup-message{color:#49665d;min-height:3em;margin:0 auto 24px;max-width:34ch}
-.startup-steps{display:flex;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:12px;font-weight:650}
-.startup-steps [aria-current=step]{color:#123d36;text-decoration:underline;text-underline-offset:4px}
-#startup-progress{width:100%;height:8px;accent-color:#123d36;border-radius:8px}
-#startup-progress:indeterminate{appearance:none;background:linear-gradient(90deg,#d8e6df 0%,#123d36 45%,#d8e6df 75%);background-size:200% 100%;animation:startup-load 2s linear infinite}
-#startup-progress:indeterminate::-webkit-progress-bar{background:transparent}
 .startup-note{font-size:12px;color:#49665d;margin:8px 0 24px}
 #mart-startup button{font:inherit;cursor:pointer;min-height:44px;border:1px solid #c9d8cf;border-radius:12px;padding:10px 18px;background:transparent;color:#123d36}
 #mart-startup button:focus-visible{outline:3px solid #123d36;outline-offset:3px}
 #mart-startup button:disabled{cursor:default;opacity:.6}
 #startup-retry{background:#123d36!important;color:#fff!important;margin:0 0 12px}
-#startup-play{background:#f4b544!important;border-color:#f4b544!important}
 #startup-game{margin-top:20px;padding:16px;border:1px solid #d8e2d9;border-radius:20px;background:#fffdf8}
 #startup-game canvas{display:block;width:100%;max-width:288px;aspect-ratio:1;margin:10px auto;background:#e4eee7;border-radius:12px;touch-action:none}
 .startup-game-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 #startup-game .startup-game-top button{padding:6px 12px;min-height:40px;font-size:13px}
-.startup-controls{display:grid;grid-template-columns:repeat(4,52px);gap:6px;justify-content:center}
-.startup-controls button{padding:8px!important;font-size:20px!important;touch-action:manipulation}
 #startup-game-status{font-size:13px;color:#49665d;min-height:1.5em;margin:8px 0}
 #mart-startup [hidden]{display:none!important}
-#mart-startup.has-game .startup-orbit{display:none}
 #mart-startup.has-game h1{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 #mart-startup.has-game #startup-message{min-height:0;margin:12px auto;font-size:14px}
 #mart-startup.has-game .startup-card>.startup-note{display:none}
 #mart-startup.has-game canvas{max-width:230px}
-@keyframes startup-turn{to{transform:rotate(360deg)}}
-@keyframes startup-load{to{background-position:-200% 0}}
-@media(prefers-reduced-motion:reduce){.startup-orbit,#startup-progress:indeterminate{animation:none}}
-@media(max-height:700px){.startup-orbit{width:48px;height:48px;margin:16px auto}.startup-card{padding:0}#startup-game canvas{max-width:210px}}
+@media(prefers-reduced-motion:reduce){#mart-startup *{animation:none}}
+@media(max-height:700px){.startup-card{padding:0}#startup-game canvas{max-width:210px}}

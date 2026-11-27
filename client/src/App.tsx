@@ -9,6 +9,7 @@ import { LanguageProvider } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("./pages/CustomerDiscovery"));
+const AreaUnavailable = lazy(() => import("./pages/AreaUnavailable"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const OffersPage = lazy(() =>
   import("./pages/CustomerDiscovery").then(m => ({ default: m.OffersPage }))
@@ -82,6 +83,7 @@ function Router() {
         >
           <Switch>
             <Route path="/" component={Home} />
+            <Route path="/area-unavailable" component={AreaUnavailable} />
             <Route path="/search" component={SearchPage} />
             <Route path="/offers" component={OffersPage} />
             <Route path="/categories" component={CategoriesPage} />

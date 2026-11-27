@@ -4,21 +4,17 @@
   const preview = document.documentElement.dataset.startupPreview === 'true';
   const root = document.createElement('section');
   root.id = 'mart-startup';
+  root.className = 'has-game';
   root.setAttribute('aria-label', 'Opening Apna Mart');
   root.innerHTML = `<div class="startup-card">
     <div class="startup-brand"><img width="44" height="44" alt="">Apna Mart</div>
-    <div class="startup-orbit" aria-hidden="true"><span></span></div>
     <h1 id="startup-title">Your neighbourhood is waking up</h1>
     <p id="startup-message" role="status" aria-live="polite">Getting things ready for you.</p>
-    <div class="startup-steps"><span>1 · App</span><span aria-current="step">2 · Connect</span><span>3 · Open</span></div>
-    <progress id="startup-progress" max="3" aria-label="Connecting to the shop server"></progress>
     <p class="startup-note">We’ll open the app as soon as the server is ready.</p>
     <button id="startup-retry" hidden>Try again</button><br>
-    <button id="startup-play" aria-expanded="false" aria-controls="startup-game">Play a quick Snake game</button>
-    <div id="startup-game" hidden><div class="startup-game-top"><strong>Neighbourhood Snake</strong><button id="startup-game-pause">Pause</button></div>
-      <canvas width="288" height="288" aria-label="Snake board. Use the arrow keys or the direction buttons below."></canvas>
-      <p id="startup-game-status" role="status">Use the arrows to collect the golden squares.</p>
-      <div class="startup-controls"><button data-direction="up" aria-label="Move up">↑</button><button data-direction="left" aria-label="Move left">←</button><button data-direction="down" aria-label="Move down">↓</button><button data-direction="right" aria-label="Move right">→</button></div>
+    <div id="startup-game"><div class="startup-game-top"><strong>Neighbourhood Snake</strong><button id="startup-game-pause">Start</button></div>
+      <canvas width="288" height="288" tabindex="0" aria-label="Snake board. Swipe or drag to steer. Arrow keys also work."></canvas>
+      <p id="startup-game-status" role="status">Swipe on the board to start. Collect the golden squares.</p>
       <p class="startup-note">Score: <strong id="startup-score">0</strong> · The app opens automatically when ready.</p>
     </div></div>`;
   document.body.append(root);
@@ -31,12 +27,6 @@
     if (completed) return;
     $('#startup-message').textContent = message;
     $('#startup-title').textContent = state === 'error' ? 'We’re taking a little longer' : state === 'opening' ? 'Your market is ready' : 'Your neighbourhood is waking up';
-    const progress = $('#startup-progress');
-    if (state === 'opening') progress.value = 2;
-    else progress.removeAttribute('value');
-    progress.setAttribute('aria-label', state === 'opening' ? 'Opening the marketplace, step 3 of 3' : 'Waiting for a confirmed server connection');
-    $('.startup-steps span[aria-current]')?.removeAttribute('aria-current');
-    root.querySelectorAll('.startup-steps span')[state === 'opening' ? 2 : 1].setAttribute('aria-current', 'step');
     $('#startup-retry').hidden = state !== 'error';
   }
   function schedule(delay) { clearTimeout(timer); timer = setTimeout(probe, delay); }
@@ -74,7 +64,7 @@
 
   // The game stays entirely on-device and has no storage, tracking or network calls.
   const canvas = $('canvas'), context = canvas.getContext('2d'), size = 16, cell = 18;
-  let snake = [], food, direction, queued, gameTimer, score = 0, playing = false, ended = false;
+  let snake = [], food, direction, queued, gameTimer, score = 0, playing = false, ended = false, started = false, pointer;
   function draw() {
     context.clearRect(0, 0, 288, 288);
     context.fillStyle = '#f4b544'; context.fillRect(food.x * cell + 2, food.y * cell + 2, cell - 4, cell - 4);
@@ -100,24 +90,40 @@
     if (!food) { ended = true; pause(); $('#startup-game-status').textContent = 'You filled the neighbourhood!'; return; }
     draw();
   }
+  function reset(next = {x:1,y:0}) {
+    direction = queued = next;
+    snake = [0,1,2].map(offset => ({x:7-offset*next.x,y:8-offset*next.y}));
+    score = 0; ended = false; $('#startup-score').textContent = '0'; newFood(); draw();
+  }
   function startGame() {
-    if (!snake.length || ended) { snake = [{x:7,y:8},{x:6,y:8},{x:5,y:8}]; direction = queued = {x:1,y:0}; score = 0; ended = false; $('#startup-score').textContent = '0'; newFood(); }
+    if (ended) reset();
+    started = true;
     playing = true; $('#startup-game-pause').textContent = 'Pause'; $('#startup-game-status').textContent = 'Collect the golden squares. Avoid the edges.'; draw(); clearInterval(gameTimer); gameTimer = setInterval(tick, 180);
   }
   function turn(value) {
     const moves = {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}, next = moves[value];
+    if (!next) return;
+    if (!started || ended) { reset(next); startGame(); return; }
+    if (!playing) startGame();
     if (playing && next && (next.x !== -direction.x || next.y !== -direction.y)) queued = next;
   }
-  $('#startup-play').addEventListener('click', () => {
-    const open = $('#startup-game').hidden;
-    $('#startup-game').hidden = !open; $('#startup-play').setAttribute('aria-expanded', String(open));
-    root.classList.toggle('has-game', open);
-    $('#startup-play').textContent = open ? 'Hide game' : 'Play a quick Snake game';
-    if (open) { startGame(); $('#startup-game').scrollIntoView({ block: 'nearest' }); } else pause();
+  canvas.addEventListener('pointerdown', event => {
+    pointer = {id:event.pointerId,x:event.clientX,y:event.clientY};
+    canvas.setPointerCapture(event.pointerId);
   });
+  canvas.addEventListener('pointermove', event => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    const dx = event.clientX-pointer.x, dy = event.clientY-pointer.y;
+    if (Math.max(Math.abs(dx),Math.abs(dy)) < 14) return;
+    turn(Math.abs(dx)>Math.abs(dy) ? (dx>0?'right':'left') : (dy>0?'down':'up'));
+    pointer = {id:event.pointerId,x:event.clientX,y:event.clientY};
+  });
+  const releasePointer = () => { pointer = undefined; };
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+  reset();
   $('#startup-game-pause').addEventListener('click', () => playing ? pause() : startGame());
-  root.querySelectorAll('[data-direction]').forEach(button => button.addEventListener('click', () => turn(button.dataset.direction)));
-  function keydown(event) { const move = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key]; if (playing && move) { event.preventDefault(); turn(move); } }
+  function keydown(event) { const move = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key]; if (move) { event.preventDefault(); turn(move); } }
   function visibility() { if (document.hidden) { pause(); clearTimeout(timer); } else if (!native && !preview && !completed && !busy && attempts < 12) schedule(0); }
   document.addEventListener('keydown', keydown); document.addEventListener('visibilitychange', visibility);
   window.MartStartup = { ready, phase, complete() {

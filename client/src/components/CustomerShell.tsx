@@ -38,6 +38,11 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const [geoBusy, setGeoBusy] = useState(false),
     [geoError, setGeoError] = useState("");
   useEffect(() => {
+    const open = () => { setAreaSearch(""); setAreaOpen(true); };
+    window.addEventListener("mart-choose-area", open);
+    return () => window.removeEventListener("mart-choose-area", open);
+  }, []);
+  useEffect(() => {
     const timer = setTimeout(() => setSearchTerm(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
@@ -57,6 +62,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const selectedTown = market.areas?.towns.find(
     town => town.id === market.townId
   );
+  const unavailablePincode = location === "/area-unavailable" ? new URLSearchParams(window.location.search).get("pincode") : null;
   const areas = (market.areas?.zones || []).flatMap(zone => {
     const town = market.areas?.towns.find(town => town.id === zone.townId);
     if (!town) return [];
@@ -72,6 +78,14 @@ export function CustomerShell({ children }: { children: ReactNode }) {
     setAreaOpen(false);
     setGeoError("");
     setSearchOpen(false);
+    if (location === "/area-unavailable") navigate("/");
+  };
+  const checkPincode = () => {
+    const pincode = areaSearch.trim();
+    if (!/^\d{6}$/.test(pincode) || market.areasLoading || !market.areas) return;
+    const matches = market.areas.zones.filter(zone => zone.postalCode === pincode);
+    if (matches.length === 1) chooseArea(matches[0].townId, matches[0].id);
+    else if (!matches.length) { setAreaOpen(false); navigate("/area-unavailable?pincode=" + pincode); }
   };
   const locate = () => {
     if (geoBusy) return;
@@ -174,13 +188,13 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             <MapPin size={21} />
             <span>
               <strong>
-                {market.areasLoading
+                {unavailablePincode && /^[0-9]{6}$/.test(unavailablePincode) ? unavailablePincode : market.areasLoading
                   ? t("Loading service areas…")
                   : market.zoneId
                     ? `${selectedTown?.name || market.townName} · ${selectedZone?.postalCode || market.locality}`
                     : t("Choose your area")}
               </strong>
-              <small>{t("Delivery or pickup")}</small>
+              <small>{t(unavailablePincode ? "Choose another area" : "Delivery or pickup")}</small>
             </span>
             <ChevronDown size={18} />
           </button>
@@ -290,7 +304,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
       <div className="customer-dock">
-        {count > 0 && !/^\/(cart|checkout)/.test(location) && (
+        {count > 0 && !/^\/(cart|checkout|area-unavailable)/.test(location) && (
           <Link href="/cart" className="mart-cart-peek">
             <ShoppingBag size={20} />
             <strong>{count}</strong>
@@ -330,6 +344,11 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               placeholder={t("Enter your pincode")}
             />
           </label>
+          {/^[0-9]{6}$/.test(areaSearch.trim()) && (
+            <button className="mart-primary" disabled={market.areasLoading || !market.areas} onClick={checkPincode}>
+              {t("Check availability")}
+            </button>
+          )}
           <button
             type="button"
             className="mart-locate"

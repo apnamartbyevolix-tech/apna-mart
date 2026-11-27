@@ -227,6 +227,11 @@ export function registerApnaVendor(app: Express) {
           e?.httpStatus ||
           codes[e?.code] ||
           (e instanceof z.ZodError ? 400 : 503);
+        if (status >= 500) console.error(JSON.stringify({
+          event: "vendor_bridge_unavailable",
+          request_id: String(req.headers["idempotency-key"] || "").slice(0, 36),
+          code: /^[A-Z0-9_]{1,30}$/.test(e?.cause?.code || e?.code || "") ? (e?.cause?.code || e.code) : "UNAVAILABLE",
+        }));
         res.status(status).json({
           message:
             status < 500
