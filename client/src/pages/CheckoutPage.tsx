@@ -1,3 +1,4 @@
+import MobileSignIn from "./MobileSignIn";
 import { useConnectivity } from "@/lib/connectivity";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -173,21 +174,10 @@ export function CheckoutPage() {
         )}
       </div>
     );
-  if (!auth.user)
-    return (
-      <div className="page-wrap">
-        <div className="login-required">
-          <UserRound />
-          <div>
-            <h1>{t("Sign in to place an order")}</h1>
-            <p>Your orders and saved addresses are private to your account.</p>
-          </div>
-          <Link href="/login?returnTo=%2Fcheckout" className="primary-link">
-            {t("Sign in")} <ArrowRight />
-          </Link>
-        </div>
-      </div>
-    );
+  if (!auth.user) return <div className="page-wrap checkout-page">
+    <Link href="/cart" className="back-link"><ArrowLeft />{t("Back to cart")}</Link>
+    <MobileSignIn embedded onVerified={() => { void utils.marketplace.quoteOrder.invalidate(); }}/>
+  </div>;
   if (!townId || !zoneId || shopQ.error || addressesQ.error)
     return (
       <div className="page-wrap">

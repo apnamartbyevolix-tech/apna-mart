@@ -1,4 +1,5 @@
 import "@/pages/customer-discovery.css";
+import { MartPushBridge } from "./CustomerNotifications";
 import {
   createContext,
   useContext,
@@ -266,7 +267,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <MarketContext.Provider value={value}>{children}</MarketContext.Provider>
+    <MarketContext.Provider value={value}><MartPushBridge user={auth.user} loading={auth.loading}/>{children}</MarketContext.Provider>
   );
 }
 

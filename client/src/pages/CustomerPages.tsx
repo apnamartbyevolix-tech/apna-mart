@@ -1,3 +1,4 @@
+import { CustomerPushSettings } from "@/components/CustomerNotifications";
 import { CatalogueMore } from "@/components/CataloguePage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useMemo, useState } from "react";
@@ -783,7 +784,7 @@ export function AccountPage() {
           <MessageSquareText /> {t("Help & support")} <ArrowRight />
         </Link>
       </div>
-      <section className="workspace-panel">
+      <CustomerPushSettings userId={auth.user.id}/><section className="workspace-panel">
         <h2>{t("Profile")}</h2>
         {identityQ.data?.verifiedMobile && (
           <p className="verified-mobile">

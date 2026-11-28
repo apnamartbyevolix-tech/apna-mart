@@ -1332,3 +1332,14 @@
 }
 .mart-unserved{max-width:640px;min-height:65vh;margin:0 auto;padding:56px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#123d36}.mart-unserved h1{font-size:clamp(28px,6vw,44px);line-height:1.15;margin:0}.mart-unserved p{max-width:46ch;line-height:1.7;color:#49665d}.mart-unserved small{color:#49665d;max-width:40ch}.mart-unserved-art{width:200px;height:160px;position:relative;display:grid;place-items:center;background:#eee9da;border-radius:50%}.mart-unserved-art>svg:first-of-type{z-index:1;background:#eee9da}.mart-unserved-art>svg:last-of-type{position:absolute;right:12px;top:4px;color:#ae7200;animation:mart-pin-float 2.6s ease-in-out infinite}.mart-unserved-road{position:absolute;bottom:26px;width:140px;border-bottom:3px dashed #9da99c;transform:rotate(-8deg)}@keyframes mart-pin-float{50%{transform:translateY(-9px) rotate(8deg)}}@media(prefers-reduced-motion:reduce){.mart-unserved-art>svg:last-of-type{animation:none}}
 .mart-primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:12px 20px;border:0;border-radius:14px;background:#123d36;color:#fffdf8;font-weight:650;cursor:pointer}.mart-primary:disabled{opacity:.5;cursor:default}.mart-primary:focus-visible{outline:3px solid #b97900;outline-offset:3px}
+
+.personal-shopping-settings{padding:16px;border:1px solid #dce5df;border-radius:16px;background:#fffdf8}.personal-shopping-settings label{display:flex;gap:12px;align-items:center;min-height:48px}.personal-shopping-settings input{width:22px;height:22px}.personal-shopping-settings p{font-size:13px;color:#526b61;margin:0}
+
+:where(.market-shell,.customer-shell,.page-wrap) :where(button,[role="button"],.primary-link){min-height:48px;transition:background-color .12s ease,transform .12s ease}
+:where(.market-shell,.customer-shell,.page-wrap) :where(button,[role="button"],.primary-link):not(:disabled):active{transform:scale(.98)}
+:where(.market-shell,.customer-shell,.page-wrap) :where(a,button,input,select,textarea):focus-visible{outline:3px solid #123d36;outline-offset:3px}
+[data-sonner-toast][data-type="success"]{animation:mart-save-confirmed .4s ease-out}
+[data-slot="dialog-overlay"]{background:rgb(18 61 54/.48)}
+[data-slot="dialog-content"]{max-height:90dvh;overflow:auto;overscroll-behavior:contain}
+@keyframes mart-save-confirmed{50%{transform:scale(1.02)}}
+@media(prefers-reduced-motion:reduce){:where(.market-shell,.customer-shell,.page-wrap) :where(button,[role="button"],.primary-link){transition:none}:where(.market-shell,.customer-shell,.page-wrap) :where(button,[role="button"],.primary-link):active{transform:none}[data-sonner-toast][data-type="success"]{animation:none}}

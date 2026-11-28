@@ -1,3 +1,4 @@
+import { demoProductImage } from "@shared/demo-product-images";
 import type { PublicOffer } from "@shared/offers";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
@@ -40,6 +41,7 @@ export type MarketProduct = {
   mrpPaise: number | null;
   image: string;
   category: string;
+  categoryId?: number;
   note?: string;
   inStock: boolean;
   availability: string;
@@ -106,8 +108,9 @@ export function toMarketProduct(
     gstIncluded: product.gstIncluded,
     shopName: product.shopName,
     mrpPaise: product.mrpPaise,
-    image: product.imageUrl || assetFallback,
+    image: demoProductImage(product) || assetFallback,
     category: categorySlug ?? "",
+    categoryId: product.categoryId,
     note: product.description ?? undefined,
     inStock: Boolean(product.inStock),
     availability: product.availability,

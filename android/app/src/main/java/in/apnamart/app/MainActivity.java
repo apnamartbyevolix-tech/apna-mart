@@ -11,6 +11,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle state) {
+        registerPlugin(NativePushPlugin.class);
         super.onCreate(state);
         // Keep the existing customer UI clear of Android status/navigation bars.
         View content = findViewById(android.R.id.content);

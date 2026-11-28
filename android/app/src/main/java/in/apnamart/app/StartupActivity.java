@@ -140,7 +140,9 @@ public class StartupActivity extends AppCompatActivity {
     private void openApp() {
         if (closed) return;
         closed = true; handler.removeCallbacksAndMessages(null);
-        startActivity(new Intent(this, MainActivity.class)); finish();
+        Intent target=new Intent(this,MainActivity.class);
+        if(getIntent().getExtras()!=null)target.putExtras(getIntent().getExtras());
+        startActivity(target);finish();
     }
     @Override protected void onStart() { super.onStart(); foreground = true; if (screen != null) screen.onResume(); probe(); }
     @Override protected void onStop() {

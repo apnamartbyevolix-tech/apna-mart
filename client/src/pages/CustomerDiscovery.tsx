@@ -1,6 +1,6 @@
 import { CatalogueMore, useCatalogue, useOfferBoundary } from "@/components/CataloguePage";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
 import {
   Apple,
@@ -153,6 +153,15 @@ function ProductShelf({ products }: { products: MarketProduct[] }) {
 export default function CustomerHome() {
   const { t } = useLanguage();
   const d = useDiscovery();
+  const preferenceKey = 'mart-personalization:' + (d.auth.user?.id || 'guest');
+  const [preference,setPreference]=useState<{key:string;enabled:boolean}>(()=>{try{return {key:preferenceKey,enabled:localStorage.getItem(preferenceKey)!=='off'};}catch{return {key:preferenceKey,enabled:true};}});
+  const personalized=preference.key===preferenceKey&&preference.enabled;
+  useEffect(()=>{try{setPreference({key:preferenceKey,enabled:localStorage.getItem(preferenceKey)!=='off'});}catch{setPreference({key:preferenceKey,enabled:true});}},[preferenceKey]);
+  const recommendations=trpc.marketplace.recommendations.useQuery({townId:d.townId||-1,zoneId:d.zoneId||-1},{enabled:!!d.auth.user&&!!d.townId&&!!d.zoneId&&personalized,retry:false,refetchOnMount:'always',staleTime:0});
+  const buyAgain=personalized&&recommendations.data&&recommendations.data.userId===d.auth.user?.id ? recommendations.data.products.map(p=>({...toMarketProduct(p),shopName:d.shops.find(s=>s.id===p.vendorId)?.name})) : [];
+  const previousCategories=new Set(buyAgain.map(p=>p.categoryId));
+  const boughtIds=new Set(buyAgain.map(p=>p.id));
+  const forYou=personalized?d.products.filter(p=>p.inStock&&previousCategories.has(p.categoryId)&&!boughtIds.has(p.id)).slice(0,8):[];
   const offers = d.products.filter(p => p.offer && p.inStock),
     festival = offers.find(p => p.offer?.festival)?.offer?.festival;
   return (
@@ -203,6 +212,9 @@ export default function CustomerHome() {
             />
             <CategoryTiles categories={d.q.data?.categories || []} />
           </section>
+          {d.auth.user&&<section className="personal-shopping-settings"><label><input type="checkbox" checked={personalized} onChange={event=>{const enabled=event.target.checked;setPreference({key:preferenceKey,enabled});try{localStorage.setItem(preferenceKey,enabled?'on':'off');}catch{}}}/>Personal shopping suggestions on this device</label><p>Based only on your completed orders. Prices and availability are checked again at checkout.</p></section>}
+          {buyAgain.length>0&&<section><Header title="Buy again" subtitle="From your own completed orders"/><ProductShelf products={buyAgain.slice(0,8)}/></section>}
+          {forYou.length>0&&<section><Header title="More for your everyday list" subtitle="Available products in categories you have bought"/><ProductShelf products={forYou}/></section>}
           {offers.length > 0 && (
             <section>
               <Header

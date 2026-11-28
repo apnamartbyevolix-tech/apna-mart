@@ -22,3 +22,14 @@
 #mart-startup.has-game canvas{max-width:230px}
 @media(prefers-reduced-motion:reduce){#mart-startup *{animation:none}}
 @media(max-height:700px){.startup-card{padding:0}#startup-game canvas{max-width:210px}}
+
+.startup-brand{margin-bottom:24px;transition:transform .28s ease}
+.is-intro .startup-brand img{animation:startup-shop 1.8s ease-in-out infinite}
+.is-intro #startup-message::after{content:"";display:block;width:7px;height:7px;margin:18px auto;border-radius:50%;background:#f4b544;box-shadow:-16px 0 #f4b544,16px 0 #f4b544;animation:startup-dots 1.2s ease-in-out infinite}
+.has-game .startup-brand{transform:translateY(-6px)}
+.has-game #startup-game{animation:startup-reveal .26s ease-out}
+#startup-game .startup-game-top button{min-height:48px}
+@keyframes startup-shop{50%{transform:translateY(-6px) rotate(-3deg)}}
+@keyframes startup-dots{50%{opacity:.35;transform:scale(.85)}}
+@keyframes startup-reveal{from{opacity:0;transform:translateY(16px);clip-path:inset(12% 0 0)}to{opacity:1;transform:none;clip-path:inset(0)}}
+@media(prefers-reduced-motion:reduce){#mart-startup *{animation:none!important;transition:none!important}.has-game .startup-brand{transform:none}}

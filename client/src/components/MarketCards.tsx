@@ -78,6 +78,9 @@ export function ProductCard({
           <img
             onError={imageFallback}
             loading="lazy"
+            decoding="async"
+            width={512}
+            height={512}
             src={product.image}
             alt={product.name}
           />
