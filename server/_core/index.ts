@@ -1,3 +1,4 @@
+import { startCustomerPushWorker } from "../marketplace/customer-push";
 import { registerHealth } from "../marketplace/health";
 import { createApiGuard } from "../marketplace/api-resources";
 import "dotenv/config";
@@ -93,7 +94,8 @@ async function startServer() {
   registerMobileAuth(app);
   registerApnaVendor(app);
   const stopOrderWorker = registerApnaSandbox(app);
-  server.on("close", () => stopOrderWorker?.());
+  const stopPushWorker=await startCustomerPushWorker();
+  server.on("close", () => { stopOrderWorker?.(); stopPushWorker(); });
   // Preserve the existing 2 MB image uploads without permitting arbitrary 50 MB requests.
   app.use(express.json({ limit: "3mb" }));
   app.use(express.urlencoded({ limit: "64kb", extended: false }));

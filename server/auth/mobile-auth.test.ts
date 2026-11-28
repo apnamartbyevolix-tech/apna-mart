@@ -4,6 +4,7 @@ import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { getDb } from "../db";
 import {
+  loginCustomerPin,
   beginCustomerLogin,
   finishCustomerLogin,
   authenticateMobileRequest,
@@ -107,6 +108,11 @@ describe("isolated customer mobile authentication", () => {
       );
     }
     vi.unstubAllEnvs();
+  });
+  it("retires PIN login without issuing a session or looking up a phone",async()=>{
+    const result=response();
+    await expect(loginCustomerPin(req(),result,{phone:'9000000001',pin:'1234'})).rejects.toMatchObject({status:409,code:'OTP_REQUIRED'});
+    expect(result.cookies).toEqual({});
   });
   it("normalizes Indian customer numbers without accepting other inputs", () => {
     expect(normalizeCustomerPhone("90000 00001")).toBe("+919000000001");

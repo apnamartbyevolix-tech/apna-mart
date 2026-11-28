@@ -596,3 +596,24 @@ export const apnaVendorRequests=pgTable("apna_vendor_requests",{
  merchantId:varchar("merchant_id",{length:36}).notNull().references(()=>apnaLinks.merchantId),requestKey:varchar("request_key",{length:36}).notNull(),
  fingerprint:varchar("fingerprint",{length:64}).notNull(),response:json("response").notNull(),createdAt:timestamp("created_at").notNull().defaultNow(),
 },t=>({key:primaryKey({columns:[t.merchantId,t.requestKey]})}));
+
+export const customerPushDevices=pgTable("customer_push_devices",{
+  installationId:varchar("installation_id",{length:36}).primaryKey(),
+  userId:int("user_id").notNull().references(()=>users.id,{onDelete:'cascade'}),
+  sessionHash:varchar("session_hash",{length:64}).notNull().references(()=>customerMobileSessions.tokenHash,{onDelete:'cascade'}),
+  token:text("token").notNull(),enabled:boolean("enabled").notNull().default(true),sound:boolean("sound").notNull().default(true),
+  registeredAt:timestamp("registered_at").notNull().defaultNow(),
+});
+export const customerPushEvents=pgTable("customer_push_events",{
+  id:int("id").generatedByDefaultAsIdentity().primaryKey(),
+  orderEventId:int("order_event_id").notNull().unique().references(()=>orderEvents.id,{onDelete:'cascade'}),
+  orderId:int("order_id").notNull().references(()=>orders.id,{onDelete:'cascade'}),
+  userId:int("user_id").notNull().references(()=>users.id,{onDelete:'cascade'}),
+  createdAt:timestamp("created_at").notNull().defaultNow(),
+});
+export const customerPushDeliveries=pgTable("customer_push_deliveries",{
+  eventId:int("event_id").notNull().references(()=>customerPushEvents.id,{onDelete:'cascade'}),
+  installationId:varchar("installation_id",{length:36}).notNull().references(()=>customerPushDevices.installationId,{onDelete:'cascade'}),
+  attempts:int("attempts").notNull().default(0),nextAt:timestamp("next_at").notNull().defaultNow(),
+  leaseUntil:timestamp("lease_until"),done:boolean("done").notNull().default(false),lastError:varchar("last_error",{length:40}),
+},t=>({pk:primaryKey({columns:[t.eventId,t.installationId]}),due:index("customer_push_due").on(t.nextAt)}));

@@ -1,3 +1,4 @@
+import { demoProductImage } from "../shared/demo-product-images";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { parseLocalDatabaseConfig } from "./marketplace/database-config";
@@ -203,7 +204,7 @@ async function seedDemo() {
           unit,
           pricePaise,
           stockQuantity,
-          imageUrl: demoImageByCategory[shop.category] ?? null,
+          imageUrl: demoProductImage({isDemo:true,name}) ?? null,
           availability: "available",
           isDemo: true,
         })

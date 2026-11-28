@@ -99,7 +99,7 @@ afterAll(async () => {
   }
   vi.unstubAllEnvs();
 });
-describe("customer PIN and OTP recovery", () => {
+describe("historical PIN compatibility and OTP-only access", () => {
   it("accepts exactly four numeric characters including a leading zero", () => {
     expect(validCustomerPin("0427")).toBe(true);
     for (const p of [427, "427", "04270", "abcd", null])
@@ -120,109 +120,51 @@ describe("customer PIN and OTP recovery", () => {
       await verifyCustomerPin("+919000000001", "9999", a.salt, a.digest)
     ).toBe(false);
   });
-  it("sets a PIN only after correct OTP then signs in without sending an SMS", async () => {
-    const c = await create(),
-      out = response();
-    await loginCustomerPin(req(), out, { phone: c.p, pin: "0427" });
-    const user = await authenticateMobileRequest(req(cookie(out)));
-    expect(user?.role).toBe("user");
-    const [i] = await query(
-      sql`SELECT * FROM customer_phone_identities WHERE phone=${c.p}`
-    );
-    expect(i.pin_digest).toHaveLength(128);
-    expect(i.pin_digest).not.toBe("0427");
-    expect(i.pin_salt).toHaveLength(32);
+  it("keeps OTP sign-in working and ignores deprecated PIN setup fields",async()=>{
+    const c=await create(),out=response();
+    expect((await authenticateMobileRequest(req(cookie(c.session))))?.role).toBe('user');
+    await expect(loginCustomerPin(req(),out,{phone:c.p,pin:'0427'})).rejects.toMatchObject({status:409,code:'OTP_REQUIRED'});
+    expect(out.cookies).toEqual({});
+    const [identity]=await query(sql`SELECT pin_digest,pin_salt FROM customer_phone_identities WHERE phone=${c.p}`);
+    expect(identity.pin_digest).toBeNull();expect(identity.pin_salt).toBeNull();
   });
-  it("rejects setting a PIN with an incorrect OTP", async () => {
-    const o = await otp(undefined, "1234");
-    await expect(
-      finishCustomerLogin(req(cookie(o.res)), response(), {
-        ...o.body,
-        code: o.body.code === "000000" ? "111111" : "000000",
-      })
-    ).rejects.toMatchObject({ status: 400 });
-    expect(
-      await query(
-        sql`SELECT * FROM customer_phone_identities WHERE phone=${o.p}`
-      )
-    ).toHaveLength(0);
+  it("rejects wrong OTP even when a legacy PIN was submitted",async()=>{
+    const o=await otp(undefined,'1234');
+    await expect(finishCustomerLogin(req(cookie(o.res)),response(),{...o.body,code:o.body.code==='000000'?'111111':'000000'})).rejects.toMatchObject({status:400});
+    expect(await query(sql`SELECT * FROM customer_phone_identities WHERE phone=${o.p}`)).toHaveLength(0);
   });
-  it("locks after five wrong guesses and rejects even the correct PIN while locked", async () => {
-    const c = await create();
-    for (let n = 1; n <= 5; n++)
-      await expect(
-        loginCustomerPin(req(), response(), { phone: c.p, pin: "9999" })
-      ).rejects.toMatchObject({ status: n === 5 ? 429 : 401 });
-    await expect(
-      loginCustomerPin(req(), response(), { phone: c.p, pin: "0427" })
-    ).rejects.toMatchObject({ status: 429 });
-    const [i] = await query(
-      sql`SELECT pin_attempts,pin_locked_until FROM customer_phone_identities WHERE phone=${c.p}`
-    );
-    expect(i.pin_attempts).toBe(5);
-    expect(i.pin_locked_until).not.toBeNull();
+  it("rejects a correct historical PIN as well as wrong guesses",async()=>{
+    const c=await create(),historical=await hashCustomerPin(c.p,'0427');
+    await db.execute(sql`UPDATE customer_phone_identities SET pin_salt=${historical.salt},pin_digest=${historical.digest} WHERE phone=${c.p}`);
+    for(const pin of ['9999','0427','0000','1234','0427'])await expect(loginCustomerPin(req(),response(),{phone:c.p,pin})).rejects.toMatchObject({status:409,code:'OTP_REQUIRED'});
+    const [identity]=await query(sql`SELECT pin_attempts,pin_digest FROM customer_phone_identities WHERE phone=${c.p}`);
+    expect(identity.pin_attempts).toBe(0);expect(identity.pin_digest).toBe(historical.digest);
   });
-  it("allows a correct PIN after the lock expires and resets the failure counter", async () => {
-    const c = await create();
-    await db.execute(
-      sql`UPDATE customer_phone_identities SET pin_attempts=5,pin_locked_until=((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 SECOND') WHERE phone=${c.p}`
-    );
-    await loginCustomerPin(req(), response(), { phone: c.p, pin: "0427" });
-    const [i] = await query(
-      sql`SELECT pin_attempts,pin_locked_until FROM customer_phone_identities WHERE phone=${c.p}`
-    );
-    expect(i.pin_attempts).toBe(0);
-    expect(i.pin_locked_until).toBeNull();
+  it("does not revive PIN login when a historical lock expires",async()=>{
+    const c=await create();
+    await db.execute(sql`UPDATE customer_phone_identities SET pin_attempts=5,pin_locked_until=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')-interval '1 second' WHERE phone=${c.p}`);
+    await expect(loginCustomerPin(req(),response(),{phone:c.p,pin:'0427'})).rejects.toMatchObject({status:409,code:'OTP_REQUIRED'});
+    expect(await authenticateMobileRequest(req(cookie(c.session)))).not.toBeNull();
   });
-  it("OTP reset changes the PIN and revokes old sessions without creating another account", async () => {
-    const c = await create();
-    const bucket = createHmac("sha256", process.env.MTM_OTP_SECRET!)
-      .update("limit:false:phone:" + c.p)
-      .digest("hex");
-    await db.execute(
-      sql`UPDATE customer_auth_limits SET last_at=((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '31 SECOND') WHERE bucket=${bucket}`
-    );
-    const reset = await otp(c.p, "7631"),
-      out = response();
-    await finishCustomerLogin(req(cookie(reset.res)), out, reset.body);
-    expect(await authenticateMobileRequest(req(cookie(c.session)))).toBeNull();
+  it("a fresh OTP reuses the account, preserves valid other sessions and remains single use",async()=>{
+    const c=await create();
+    const bucket=createHmac('sha256',process.env.MTM_OTP_SECRET!).update('limit:false:phone:'+c.p).digest('hex');
+    await db.execute(sql`UPDATE customer_auth_limits SET last_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')-interval '31 second' WHERE bucket=${bucket}`);
+    const next=await otp(c.p,'7631'),out=response();
+    await finishCustomerLogin(req(cookie(next.res)),out,next.body);
+    const first=await authenticateMobileRequest(req(cookie(c.session))),second=await authenticateMobileRequest(req(cookie(out)));
+    expect(first?.id).toBe(second?.id);expect(second).not.toBeNull();
+    expect(await query(sql`SELECT * FROM customer_phone_identities WHERE phone=${c.p}`)).toHaveLength(1);
+    await expect(finishCustomerLogin(req(cookie(next.res)),response(),next.body)).rejects.toMatchObject({status:400});
+  });
+  it("retains OTP-only clients without requiring a PIN",async()=>{
+    const o=await otp(),out=response();await finishCustomerLogin(req(cookie(o.res)),out,o.body);
     expect(await authenticateMobileRequest(req(cookie(out)))).not.toBeNull();
-    await expect(
-      loginCustomerPin(req(), response(), { phone: c.p, pin: "0427" })
-    ).rejects.toMatchObject({ status: 401 });
-    await loginCustomerPin(req(), response(), { phone: c.p, pin: "7631" });
-    expect(
-      await query(
-        sql`SELECT * FROM customer_phone_identities WHERE phone=${c.p}`
-      )
-    ).toHaveLength(1);
-    await expect(
-      finishCustomerLogin(req(cookie(reset.res)), response(), reset.body)
-    ).rejects.toMatchObject({ status: 400 });
+    await expect(loginCustomerPin(req(),response(),{phone:o.p,pin:'0427'})).rejects.toMatchObject({status:409});
   });
-  it("keeps existing OTP clients working and requires OTP to set their first PIN", async () => {
-    const o = await otp(),
-      out = response();
-    await finishCustomerLogin(req(cookie(o.res)), out, o.body);
-    expect(await authenticateMobileRequest(req(cookie(out)))).not.toBeNull();
-    await expect(
-      loginCustomerPin(req(), response(), { phone: o.p, pin: "0427" })
-    ).rejects.toMatchObject({ status: 401 });
-  });
-  it("does not disclose whether a phone is registered or promote customer roles", async () => {
-    const missing = phone();
-    await expect(
-      loginCustomerPin(req(), response(), { phone: missing, pin: "0427" })
-    ).rejects.toMatchObject({ status: 401, code: "INVALID_PIN" });
-    const c = await create(),
-      out = response();
-    await loginCustomerPin(req(), out, {
-      phone: c.p,
-      pin: "0427",
-      role: "admin",
-    });
-    expect((await authenticateMobileRequest(req(cookie(out))))?.role).toBe(
-      "user"
-    );
+  it("does not disclose registered phones or promote an OTP customer to administrator",async()=>{
+    const c=await create();
+    for(const p of [phone(),c.p])await expect(loginCustomerPin(req(),response(),{phone:p,pin:'0427',role:'admin'})).rejects.toMatchObject({status:409,code:'OTP_REQUIRED'});
+    expect((await authenticateMobileRequest(req(cookie(c.session))))?.role).toBe('user');
   });
 });

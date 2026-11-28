@@ -1,3 +1,4 @@
+import { registerCustomerPush, removeCustomerPush } from "./customer-push";
 import { retryOrderSync } from "./retry-order-sync";
 import { relayApnaOutbox, writeCatalogueProducts } from "../integrations/apna-galla/sandbox";
 import { SignedSandboxTransport } from "../integrations/apna-galla/transport";
@@ -136,6 +137,57 @@ const workflow = describe.skipIf(!integrationEnabled)(
       const quote = await who.marketplace.quoteOrder(input);
       return who.marketplace.placeOrder({ ...input, quoteFingerprint: quote.quoteFingerprint });
     }
+
+    it("recommends only the caller's completed orders at current prices and availability", async () => {
+      const {fixture,input}=await quotedFixture();
+      const mine=caller(customer).marketplace, other=caller(vendorUser).marketplace;
+      const placed=await mine.placeOrder(input);
+      expect((await mine.recommendations(fixture.scope)).products).toEqual([]);
+      await db.update(orders).set({status:"delivered"}).where(eq(orders.id,placed.orderId));
+      await db.update(products).set({pricePaise:1789}).where(eq(products.id,fixture.productId));
+      const result=await mine.recommendations(fixture.scope);
+      expect(result.userId).toBe(customer.id);expect(result.products.map(p=>p.id)).toEqual([fixture.productId]);expect(result.products[0].pricePaise).toBe(1789);
+      expect((await other.recommendations(fixture.scope)).products).toEqual([]);
+      expect((await mine.recommendations({townId,zoneId:otherZoneId})).products).toEqual([]);
+      await expect(caller(null).marketplace.recommendations(fixture.scope)).rejects.toMatchObject({code:"UNAUTHORIZED"});
+      await db.update(products).set({stockQuantity:0}).where(eq(products.id,fixture.productId));
+      expect((await mine.recommendations(fixture.scope)).products).toEqual([]);
+      await db.update(products).set({stockQuantity:3}).where(eq(products.id,fixture.productId));
+      await db.update(vendorProfiles).set({isOpen:false}).where(eq(vendorProfiles.id,fixture.shopId));
+      expect((await mine.recommendations(fixture.scope)).products).toEqual([]);
+      await db.update(vendorProfiles).set({isOpen:true}).where(eq(vendorProfiles.id,fixture.shopId));
+      await db.update(categories).set({regulated:true}).where(eq(categories.id,fixture.productCategory));
+      expect((await mine.recommendations(fixture.scope)).products).toEqual([]);
+    });
+
+    it("creates one durable customer notification event for each committed order event", async () => {
+      const {input}=await quotedFixture();const api=caller(customer).marketplace;
+      const first=await api.placeOrder(input), replay=await api.placeOrder(input);
+      expect(replay.orderId).toBe(first.orderId);
+      const count=await db.execute(sql`SELECT e.id,p.id AS push_id,p.user_id FROM order_events e LEFT JOIN customer_push_events p ON p.order_event_id=e.id WHERE e."orderId"=${first.orderId}`);
+      expect(count.rows.length).toBeGreaterThan(0);
+      expect(count.rows.every(row=>row.push_id&&row.user_id===customer.id)).toBe(true);
+      expect(new Set(count.rows.map(row=>row.push_id)).size).toBe(count.rows.length);
+    });
+
+    it("binds notification installations to active verified sessions and isolates device removal", async () => {
+      const raw=Buffer.from(randomUUID()+randomUUID()).toString("base64url").slice(0,43),hash=createHash("sha256").update(raw).digest("hex"),installationId=randomUUID();
+      const req={headers:{cookie:"mtm_customer_local="+raw}} as any;
+      await db.execute(sql`INSERT INTO customer_mobile_sessions(token_hash,user_id,expires_at) VALUES(${hash},${customer.id},(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')+interval '1 day')`);
+      const body={installationId,token:"fictitious-device-token-".repeat(8),sound:true};
+      try {
+        await expect(registerCustomerPush(req,vendorUser.id,body)).rejects.toMatchObject({code:"UNAUTHORIZED"});
+        expect(await registerCustomerPush(req,customer.id,body)).toMatchObject({enabled:true,configured:false});
+        await removeCustomerPush(vendorUser.id,installationId);
+        expect((await db.execute(sql`SELECT enabled FROM customer_push_devices WHERE installation_id=${installationId}`)).rows[0].enabled).toBe(true);
+        await registerCustomerPush(req,customer.id,{...body,token:"rotated-fictitious-token-".repeat(8),sound:false});
+        expect((await db.execute(sql`SELECT token,sound FROM customer_push_devices WHERE installation_id=${installationId}`)).rows[0]).toMatchObject({token:"rotated-fictitious-token-".repeat(8),sound:false});
+        await db.execute(sql`UPDATE customer_mobile_sessions SET revoked_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE token_hash=${hash}`);
+        await expect(registerCustomerPush(req,customer.id,body)).rejects.toMatchObject({code:"UNAUTHORIZED"});
+        await removeCustomerPush(customer.id,installationId);
+        expect((await db.execute(sql`SELECT enabled FROM customer_push_devices WHERE installation_id=${installationId}`)).rows[0].enabled).toBe(false);
+      } finally {await db.execute(sql`DELETE FROM customer_mobile_sessions WHERE token_hash=${hash}`);}
+    });
 
     it("issues a usable HTTP-only cookie only after the isolated local demo guards", async () => {
       vi.stubEnv("MTM_ENABLE_DEV_AUTH", "1"); vi.stubEnv("MANUS_PROJECT_ID", "local-demo-cookie-test");

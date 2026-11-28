@@ -9,7 +9,10 @@ const sourceTables = Object.entries(original).filter(([, value]) => is(value, My
 describe("PostgreSQL schema migration parity", () => {
   it("preserves all 31 existing tables", () => {
     expect(sourceTables).toHaveLength(31);
-    expect(Object.values(candidate).filter(value => is(value, PgTable))).toHaveLength(31);
+    const names=Object.values(candidate).filter(value=>is(value,PgTable)).map(table=>pgConfig(table as PgTable).name);
+    expect(names).toHaveLength(34);
+    expect(names).toEqual(expect.arrayContaining(sourceTables.map(([,table])=>mysqlConfig(table as MySqlTable).name)));
+    expect(names.filter(name=>name.startsWith('customer_push_')).sort()).toEqual(['customer_push_deliveries','customer_push_devices','customer_push_events']);
   });
   for (const [name, table] of sourceTables) {
     it(`preserves ${name} columns, identity and relational constraints`, () => {

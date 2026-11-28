@@ -1,3 +1,4 @@
+import { registerCustomerPush, removeCustomerPush } from "./marketplace/customer-push";
 import { browseInput, browseRows } from "./marketplace/browse";
 import {activeOffer,effectiveProduct} from "../shared/offers";
 import {validShopHours,withinShopHours} from '../shared/shop-hours';
@@ -1461,6 +1462,33 @@ export const appRouter = router({
         })),
       };
     }),
+    registerPush: protectedProcedure.input(z.object({installationId:z.string().uuid(),token:z.string().min(20).max(4096),sound:z.boolean()}).strict())
+      .mutation(({ctx,input})=>registerCustomerPush(ctx.req,ctx.user.id,input)),
+    removePush: protectedProcedure.input(z.object({installationId:z.string().uuid()}).strict())
+      .mutation(({ctx,input})=>removeCustomerPush(ctx.user.id,input.installationId)),
+    recommendations: protectedProcedure
+      .input(z.object({townId:z.number().int().positive(),zoneId:z.number().int().positive()}))
+      .query(async ({ctx,input}) => {
+        requireLocalMarketplace(ctx.req);
+        const db=await database();
+        await refreshLinkedEligibility(input);
+        await requireActiveServiceZone(db,input.townId,input.zoneId);
+        const purchased=await db.select({productId:orderItems.productId,frequency:sql<number>`count(DISTINCT ${orders.id})`,lastBought:sql<Date>`max(${orders.createdAt})`})
+          .from(orderItems).innerJoin(orders,eq(orderItems.orderId,orders.id))
+          .where(and(eq(orders.customerId,ctx.user.id),eq(orders.status,'delivered'),eq(orders.townId,input.townId),eq(orders.zoneId,input.zoneId),sql`${orderItems.productId} IS NOT NULL`))
+          .groupBy(orderItems.productId).orderBy(desc(sql`count(DISTINCT ${orders.id})`),desc(sql`max(${orders.createdAt})`)).limit(24);
+        const ids=purchased.flatMap(row=>row.productId===null?[]:[row.productId]);
+        if(!ids.length)return {userId:ctx.user.id,products:[]};
+        const current=await db.select({product:products}).from(products)
+          .innerJoin(vendorProfiles,eq(products.vendorId,vendorProfiles.id))
+          .innerJoin(categories,eq(products.categoryId,categories.id))
+          .where(and(inArray(products.id,ids),eq(products.availability,'available'),sql`${products.stockQuantity}>0`,
+            eq(vendorProfiles.townId,input.townId),eq(vendorProfiles.zoneId,input.zoneId),eq(vendorProfiles.status,'approved'),eq(vendorProfiles.isOpen,true),
+            publishedSellerCondition(vendorProfiles.id,vendorProfiles.isDemo),publishedProductCondition(products.id,products.vendorId,products.isDemo),
+            eq(categories.enabled,true),eq(categories.regulated,false)));
+        const byId=new Map(current.map(row=>[row.product.id,row.product]));
+        return {userId:ctx.user.id,products:ids.flatMap(id=>{const product=byId.get(id);return product?[publicProduct(product)]:[];})};
+      }),
     home: publicProcedure
       .input(
         z.object({
@@ -3082,7 +3110,7 @@ export const appRouter = router({
         .innerJoin(orders, eq(paymentRecords.orderId, orders.id))
         .innerJoin(vendorProfiles, eq(orders.vendorId, vendorProfiles.id))
         .where(inArray(paymentRecords.method, ["cod", "pickup"]))
-        .orderBy(desc(paymentRecords.recordedAt), desc(paymentRecords.createdAt))
+        .orderBy(sql`${paymentRecords.recordedAt} DESC NULLS LAST`, desc(paymentRecords.createdAt), desc(paymentRecords.id))
         .limit(250);
     }),
     reconcileCashCollection: adminProcedure

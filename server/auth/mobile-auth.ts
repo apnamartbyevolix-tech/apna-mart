@@ -14,12 +14,6 @@ import express, { type Express, type Request, type Response } from "express";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { users } from "../../drizzle/schema";
-import {
-  hashCustomerPin,
-  validCustomerPin,
-  verifyCustomerPin,
-} from "./customer-pin";
-
 export class MobileAuthError extends Error {
   constructor(
     public status: number,
@@ -307,9 +301,7 @@ export async function finishCustomerLogin(
     !/^\d{6}$/.test(body.code)
   )
     invalid();
-  if (body.pin !== undefined && !validCustomerPin(body.pin))
-    fail(400, "INVALID_PIN", "Choose a four-digit PIN.");
-  const binding = cookies(req)[bindingName()];
+const binding = cookies(req)[bindingName()];
   if (typeof binding !== "string") invalid();
   const db = await dbRequired(),
     token = randomBytes(32).toString("base64url"),
@@ -372,16 +364,6 @@ export async function finishCustomerLogin(
       sql`SELECT * FROM users WHERE id=${identity.user_id} FOR UPDATE`
     );
     if (!user || user.role !== "user") return { error: "invalid" };
-    if (body.pin !== undefined) {
-      const pin = await hashCustomerPin(c.phone, body.pin);
-      await tx.execute(
-        sql`UPDATE customer_phone_identities SET pin_salt=${pin.salt},pin_digest=${pin.digest},pin_attempts=0,pin_locked_until=NULL WHERE phone=${c.phone}`
-      );
-      // A fresh OTP is required to replace a PIN. Revoke all older device sessions.
-      await tx.execute(
-        sql`UPDATE customer_mobile_sessions SET revoked_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE user_id=${user.id} AND revoked_at IS NULL`
-      );
-    }
     await tx.execute(
       sql`UPDATE customer_otp_challenges SET state='CONSUMED' WHERE id=${c.id}`
     );
@@ -434,89 +416,14 @@ function establishCustomerCookie(res: Response, token: string) {
     cookieOptions()
   );
 }
-export async function loginCustomerPin(req: Request, res: Response, body: any) {
-  const phone = normalizeCustomerPhone(body?.phone);
-  if (!phone || !validCustomerPin(body?.pin))
-    fail(
-      400,
-      "INVALID_REQUEST",
-      "Enter your mobile number and four-digit PIN."
-    );
-  const db = await dbRequired(),
-    token = randomBytes(32).toString("base64url");
-  const result = await db.transaction(async tx => {
-    // Persistent IP and phone buckets cover missing accounts as well as real ones.
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    for (const key of ["ip:" + ip, "phone:" + phone].sort()) {
-      const bucket = mac("pin-limit:" + key);
-      await tx.execute(
-        sql`INSERT INTO customer_auth_limits(bucket,hits,resets_at,last_at) VALUES(${bucket},0,((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 HOUR'),(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')) ON CONFLICT DO NOTHING`
-      );
-      const [limit] = await rows(
-        tx,
-        sql`SELECT *,resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS expired FROM customer_auth_limits WHERE bucket=${bucket} FOR UPDATE`
-      );
-      if (!limit.expired && limit.hits >= 30) return { error: "limited" };
-      await tx.execute(
-        sql`UPDATE customer_auth_limits SET hits=CASE WHEN resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') THEN 1 ELSE hits+1 END,resets_at=CASE WHEN resets_at<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') THEN ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 HOUR') ELSE resets_at END WHERE bucket=${bucket}`
-      );
-    }
-    const [identity] = await rows(
-      tx,
-      sql`SELECT *,pin_locked_until>(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS locked FROM customer_phone_identities WHERE phone=${phone} FOR UPDATE`
-    );
-    if (identity?.locked) return { error: "limited" };
-    const matches = await verifyCustomerPin(
-      phone!,
-      body.pin,
-      identity?.pin_salt,
-      identity?.pin_digest
-    );
-    if (!matches) {
-      if (identity) {
-        await tx.execute(
-          sql`UPDATE customer_phone_identities SET pin_attempts=CASE WHEN pin_locked_until IS NOT NULL AND pin_locked_until<=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') THEN 1 ELSE pin_attempts+1 END,pin_locked_until=CASE WHEN pin_attempts>=4 AND (pin_locked_until IS NULL OR pin_locked_until>(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')) THEN ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '15 MINUTE') ELSE NULL END WHERE phone=${phone}`
-        );
-        if (!identity.pin_locked_until && identity.pin_attempts >= 4)
-          return { error: "limited" };
-      }
-      return { error: "invalid" };
-    }
-    const [user] = await rows(
-      tx,
-      sql`SELECT id FROM users WHERE id=${identity.user_id} AND role='user' FOR UPDATE`
-    );
-    if (!user) return { error: "invalid" };
-    await tx.execute(
-      sql`UPDATE customer_phone_identities SET pin_attempts=0,pin_locked_until=NULL WHERE phone=${phone}`
-    );
-    await tx.execute(
-      sql`INSERT INTO customer_mobile_sessions(token_hash,user_id,expires_at) VALUES(${digest(token)},${user.id},((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '30 DAY'))`
-    );
-    await tx.execute(
-      sql`UPDATE users SET "lastSignedIn"=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE id=${user.id}`
-    );
-    await tx.execute(
-      sql`UPDATE customer_mobile_sessions SET revoked_at=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE token_hash IN (SELECT token_hash FROM customer_mobile_sessions WHERE user_id=${user.id} AND revoked_at IS NULL AND token_hash<>${digest(token)} ORDER BY created_at DESC,token_hash DESC OFFSET 4)`
-    );
-    return { success: true };
-  });
-  if (result.error === "limited")
-    fail(
-      429,
-      "TRY_LATER",
-      "Too many PIN attempts. Wait 15 minutes or use OTP to reset your PIN."
-    );
-  if (result.error)
-    fail(
-      401,
-      "INVALID_PIN",
-      "Mobile number or PIN is incorrect. New here or forgot your PIN? Verify with OTP."
-    );
-  establishCustomerCookie(res, token);
-  return { success: true };
+export async function loginCustomerPin(_req: Request, _res: Response, _body: unknown) {
+  fail(409, "OTP_REQUIRED", "Please verify your mobile with OTP. PIN sign-in has been replaced; existing signed-in sessions are kept.");
 }
 
+export function mobileSessionHash(req: Request): string | null {
+  const token=cookies(req)[cookieName()];
+  return typeof token==='string' && /^[-_A-Za-z0-9]{43}$/.test(token) ? digest(token) : null;
+}
 export async function authenticateMobileRequest(req: Request) {
   const token = cookies(req)[cookieName()];
   if (!token) return null;
